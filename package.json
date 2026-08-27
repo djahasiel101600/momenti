@@ -10,6 +10,7 @@
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview",
     "server": "node server/index.mjs",
+    "smoke": "node scripts/smoke-api.mjs",
     "start": "node server/index.mjs"
   },
   "dependencies": {

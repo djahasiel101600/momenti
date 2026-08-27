@@ -20,7 +20,7 @@ const units = [
   { key: "seconds", label: "Seconds" },
 ];
 
-export default function CountdownTimer({ date }) {
+export default function CountdownTimer({ date, appearance }) {
   const target = new Date(date).getTime();
   const [t, setT] = useState(() => getRemaining(target));
 
@@ -30,7 +30,7 @@ export default function CountdownTimer({ date }) {
   }, [target]);
 
   return (
-    <section className="bg-[#F2F0ED] inv-ink py-24 md:py-32 px-6">
+    <section className="inv-paper py-24 md:py-32 px-6" style={appearance?.style}>
       <div className="mx-auto max-w-4xl text-center">
         <motion.span
           initial={{ opacity: 0, y: 20 }}

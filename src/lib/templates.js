@@ -48,6 +48,17 @@ export const TEMPLATES = [
   },
 ];
 
+// Quick-apply palettes offered by the Studio Style tab. All assume a dark
+// canvas — the light "paper" sections, hero overlay and ink text derive
+// their contrast from --inv-bg, which the layout treats as near-black.
+export const STYLE_PRESETS = [
+  { id: "wedding-copper", name: "Copper", accentColor: "#C58A58", backgroundColor: "#0A0A0A", textColor: "#F2F0ED" },
+  { id: "birthday-rose", name: "Rosewood", accentColor: "#C98F7A", backgroundColor: "#140D0B", textColor: "#F6EFEA" },
+  { id: "gala-champagne", name: "Champagne", accentColor: "#B89968", backgroundColor: "#101010", textColor: "#F4F1E8" },
+  { id: "noir-silver", name: "Noir Silver", accentColor: "#B9BDB2", backgroundColor: "#111214", textColor: "#EFF1EA" },
+];
+
+
 const CONTENT = {
   wedding: {
     couple: "John & Jane",
@@ -99,6 +110,80 @@ const CONTENT = {
   },
 };
 
+// --- Sections ------------------------------------------------------------------
+
+// Order here is the default page order. The Studio lets users toggle
+// visibility, edit labels and reorder; the public renderer walks this list.
+export const SECTION_DEFS = [
+  { id: "countdown", label: "Countdown", hasHeading: false },
+  { id: "story", label: "Our Story", hasHeading: true },
+  { id: "details", label: "Details", hasHeading: true },
+  { id: "gallery", label: "Gallery", hasHeading: true },
+  { id: "rsvp", label: "RSVP", hasHeading: true },
+];
+
+const SECTION_IDS = SECTION_DEFS.map((s) => s.id);
+
+/** Built-in copy per section — used when the user hasn't overridden it. */
+export const DEFAULT_HEADINGS = {
+  story: "How we met.",
+  details: "When & where.",
+  gallery: "The gallery.",
+  rsvp: "Will you join us?",
+};
+
+export const SECTION_DEFAULT_EYEBROWS = {
+  countdown: "",
+  story: "Our Story",
+  details: "The Details",
+  gallery: "Moments",
+  rsvp: "The Guest Ledger",
+};
+
+/**
+ * Splits a plain string so the trailing word renders italic (the signature
+ * momenti look). Punctuation travels with the word; a single word renders
+ * fully emphasized.
+ */
+export function emphasizedHeading(text) {
+  const value = String(text || "").trim();
+  if (!value) return null;
+  const match = value.match(/^(.*?)([^\s]+)$/s);
+  if (!match || !match[1].trim()) return [null, value];
+  return [match[1].replace(/\s+$/, " "), match[2]];
+}
+
+function buildDefaultSections() {
+  return SECTION_DEFS.map((def) => ({ ...def, visible: true }));
+}
+
+// Sanitize a stored sections array: drop malformed/unknown rows, dedupe,
+// then append any missing known ids in their canonical spot.
+function sanitizeSections(raw) {
+  if (!Array.isArray(raw)) return null;
+  const seen = new Set();
+  const out = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const id = String(row.id || "");
+    if (!SECTION_IDS.includes(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      id,
+      label:
+        typeof row.label === "string" && row.label.trim()
+          ? row.label.trim()
+          : SECTION_DEFAULT_EYEBROWS[id],
+      visible: row.visible !== false,
+    });
+  }
+  for (const def of SECTION_DEFS) {
+    if (!seen.has(def.id)) {
+      out.push({ id: def.id, label: SECTION_DEFAULT_EYEBROWS[def.id], visible: true });
+    }
+  }
+  return out;
+}
 export function slugify(s) {
   return String(s || "")
     .toLowerCase()
@@ -107,7 +192,126 @@ export function slugify(s) {
     .replace(/^-+|-+$/g, "");
 }
 
+const isHexColor = (v) => typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v);
+
+// --- Color engine ---------------------------------------------------------------
+//
+// Powers per-section styling. Sections declare Optional appearance overrides
+// (background / text / accent); anything left blank inherits the invitation's
+// global theme. Text never becomes invisible: when only a background is given,
+// ink is derived from its luminance (readableInk) rather than assumed.
+
+function hexToRgbChannels(hex) {
+  return {
+    r: parseInt(hex.slice(1, 3), 16),
+    g: parseInt(hex.slice(3, 5), 16),
+    b: parseInt(hex.slice(5, 7), 16),
+  };
+}
+
+function channelToHexPart(n) {
+  return Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+}
+
+/** WCAG-style relative luminance (0..1). */
+export function relativeLuminance(hex) {
+  const { r, g, b } = hexToRgbChannels(hex);
+  const lin = (c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+/**
+ * Picks a readable ink for a given surface. Light panels get near-black,
+ * dark panels get warm off-white — unless the caller provides an override.
+ */
+export function readableInk(bgHex, fallback = "#141414") {
+  if (!isHexColor(bgHex)) return fallback;
+  return relativeLuminance(bgHex) > 0.4 ? "#141414" : "#F7F4EE";
+}
+
+/** Linear-ish blend of two hex colors; t=0 -> a, t=1 -> b. */
+export function mixHex(a, b, t) {
+  if (!isHexColor(a) || !isHexColor(b)) return a;
+  const x = hexToRgbChannels(a);
+  const y = hexToRgbChannels(b);
+  const k = Math.max(0, Math.min(1, t));
+  return (
+    "#" +
+    channelToHexPart(x.r + (y.r - x.r) * k) +
+    channelToHexPart(x.g + (y.g - x.g) * k) +
+    channelToHexPart(x.b + (y.b - x.b) * k)
+  );
+}
+
+const SECTION_STYLE_KEYS = ["bgColor", "textColor", "accentColor"];
+
+function sanitizeSectionStyles(raw) {
+  const out = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const id of SECTION_IDS) {
+    const entry = raw[id];
+    if (!entry || typeof entry !== "object") continue;
+    const cleaned = {};
+    for (const key of SECTION_STYLE_KEYS) {
+      if (isHexColor(entry[key])) cleaned[key] = entry[key].toLowerCase();
+    }
+    if (Object.keys(cleaned).length) out[id] = cleaned;
+  }
+  return out;
+}
+
+// Sections that render on the dark canvas (--inv-bg/--inv-text); everything
+// else renders on the light "paper" panel (--inv-paper/--inv-paper-ink).
+const DARK_SURFACE_SECTIONS = new Set(["rsvp"]);
+
+/**
+ * Resolved appearance for one section. Priority: section override ->
+ * invitation-wide theme -> adaptive/built-in default. Text never becomes
+ * invisible: when only a background is chosen, ink derives from its
+ * luminance (readableInk). Returned `style` holds CSS custom properties to
+ * spread on the section wrapper; `hex` exposes the concrete colors (the
+ * Story section needs real values for its scroll-gradient interpolation).
+ */
+export function resolveSectionAppearance(data, id) {
+  const override = (data.sectionStyles && data.sectionStyles[id]) || {};
+  const theme = data.theme || {};
+
+  if (DARK_SURFACE_SECTIONS.has(id)) {
+    const bg = override.bgColor || data.backgroundColor || "#0A0A0A";
+    const text =
+      override.textColor ||
+      (override.bgColor ? readableInk(bg) : "") ||
+      (isHexColor(theme.textColor) ? theme.textColor : "") ||
+      readableInk(bg);
+    const accent = override.accentColor || data.accentColor || "#C58A58";
+    return {
+      style: { "--inv-bg": bg, "--inv-text": text, "--inv-accent": accent },
+      hex: { bg, ink: text, accent, paper: "#F2F0ED" },
+    };
+  }
+
+  const paper =
+    override.bgColor ||
+    (isHexColor(theme.paperColor) ? theme.paperColor : "") ||
+    "#F2F0ED";
+  const ink = override.textColor || readableInk(paper);
+  const accent = override.accentColor || data.accentColor || "#C58A58";
+
+  return {
+    style: {
+      "--inv-paper": paper,
+      "--inv-paper-ink": ink,
+      "--inv-accent": accent,
+    },
+    hex: { paper, ink, accent },
+  };
+}
+
 // Build a fresh, editable invitation object from a template id.
+
 export function templateDefaults(templateId) {
   const t = TEMPLATES.find((x) => x.id === templateId) || TEMPLATES[0];
   const c = CONTENT[t.id];
@@ -131,16 +335,52 @@ export function templateDefaults(templateId) {
     accentColor: t.accentColor,
     backgroundColor: t.backgroundColor,
     countdownVisible: true,
+    // --- extended customization surface ---
+    heroKicker: "",     // "" falls back to eventType on the public page
+    heroSubline: "",    // optional line beneath the date
+    timeNote: "",       // overrides the Time card body
+    dressCodeNote: "",  // overrides the Dress Code card body
+    detailsNote: "",    // freeform block under the detail cards
+    rsvpNote: "",       // shown under the RSVP heading
+    rsvpMaxGuests: "5", // guest-count options run 1..N
+    headings: {},       // per-section overrides, "" = built-in copy
+    sections: buildDefaultSections(),
+    sectionStyles: {}, // per-section {bgColor,textColor,accentColor}, blank = inherit
+    theme: { textColor: "#F2F0ED", paperColor: "#F2F0ED", displayFont: "serif" },
   };
 }
-
 export function templateName(id) {
   const t = TEMPLATES.find((x) => x.id === id);
   return t ? t.name : "Custom";
 }
 
-// Map a stored Invitation record into the shape the invitation components expect.
+/**
+ * Map a stored Invitation record into the shape the invitation components
+ * expect. Tolerates records saved before the extended customization fields
+ * existed (legacy migration lives here): missing sections derive from the
+ * old top-level countdownVisible flag, colors fall back to built-ins.
+ */
 export function normalizeInvitation(r) {
+  let sections = sanitizeSections(r.sections);
+  if (!sections) {
+    // Legacy record: visibility existed only for the countdown.
+    sections = buildDefaultSections().map((s) =>
+      s.id === "countdown" ? { ...s, visible: r.countdownVisible !== false } : s
+    );
+  }
+
+  const headingsIn = r.headings && typeof r.headings === "object" ? r.headings : {};
+  const headings = {};
+  for (const def of SECTION_DEFS) {
+    if (!def.hasHeading) continue;
+    const override =
+      typeof headingsIn[def.id] === "string" ? headingsIn[def.id].trim() : "";
+    headings[def.id] = override || DEFAULT_HEADINGS[def.id];
+  }
+
+  const themeIn = r.theme && typeof r.theme === "object" ? r.theme : {};
+  const cleanText = (v) => (typeof v === "string" ? v.trim() : "");
+
   return {
     slug: r.slug,
     couple: r.couple,
@@ -158,8 +398,23 @@ export function normalizeInvitation(r) {
     heroImage: r.heroImage,
     storyImage: r.storyImage,
     gallery: Array.isArray(r.gallery) ? r.gallery : [],
-    accentColor: r.accentColor || "#C58A58",
-    backgroundColor: r.backgroundColor || "#0A0A0A",
-    countdownVisible: r.countdownVisible !== false,
+    accentColor: isHexColor(r.accentColor) ? r.accentColor : "#C58A58",
+    backgroundColor: isHexColor(r.backgroundColor) ? r.backgroundColor : "#0A0A0A",
+    // --- extended customization surface ---
+    heroKicker: cleanText(r.heroKicker) || cleanText(r.eventType),
+    heroSubline: cleanText(r.heroSubline),
+    timeNote: cleanText(r.timeNote),
+    dressCodeNote: cleanText(r.dressCodeNote),
+    detailsNote: cleanText(r.detailsNote),
+    rsvpNote: cleanText(r.rsvpNote),
+    rsvpMaxGuests: Math.min(Math.max(parseInt(r.rsvpMaxGuests, 10) || 5, 1), 10),
+    sections,
+    headings,
+    sectionStyles: sanitizeSectionStyles(r.sectionStyles),
+    theme: {
+      textColor: isHexColor(themeIn.textColor) ? themeIn.textColor : "#F2F0ED",
+      paperColor: isHexColor(themeIn.paperColor) ? themeIn.paperColor : "#F2F0ED",
+      displayFont: themeIn.displayFont === "sans" ? "sans" : "serif",
+    },
   };
 }

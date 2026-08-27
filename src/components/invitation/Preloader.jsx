@@ -34,7 +34,7 @@ export default function Preloader({ couple }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6, duration: 0.6 }}
-          className="font-serif-display italic text-3xl text-[#F2F0ED]"
+          className="font-serif-display italic text-3xl inv-text"
         >
           {couple}
         </motion.p>

@@ -6,6 +6,8 @@
 // The exported name stays `base44` so call sites only change their import
 // path; method names stay identical for the same reason.
 
+import { buildLoginRedirect } from "@/lib/authReturnTo";
+
 const TOKEN_KEY = "momenti_token";
 
 const API_BASE = "/api";
@@ -141,16 +143,12 @@ async function logout(redirectTarget) {
 }
 
 function redirectToLogin(currentLocation) {
-  // Preserves the source path like the SDK flow did (?returnTo=…).
-  let pathPart = "/";
-  try {
-    const url = new URL(currentLocation || window.location.href, window.location.origin);
-    pathPart = url.pathname + url.search;
-  } catch {
-    /* fall back below */
-  }
-  if (!pathPart.startsWith("/") || pathPart.startsWith("//")) pathPart = "/";
-  window.location.assign("/login?returnTo=" + encodeURIComponent(pathPart));
+  // Centralized in authReturnTo.js so the no-nesting rule (and the
+  // open-redirect guards) live beside safeReturnTo().
+  const target = buildLoginRedirect(currentLocation);
+  window.location.assign(
+    target ? "/login?returnTo=" + encodeURIComponent(target) : "/login"
+  );
 }
 
 // Provider sign-in cannot exist detached from Base44 (no OAuth broker);

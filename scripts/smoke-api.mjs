@@ -52,16 +52,59 @@ const server = spawn(process.execPath, [path.join(__dirname, "..", "server", "in
 
 try {
   // Wait for boot.
-  let up = false;
-  for (let i = 0; i < 40 && !up; i++) {
+  let healthy = false;
+  for (let i = 0; i < 40 && !healthy; i++) {
     try {
       await fetch(`${BASE}/api/health`);
-      up = true;
+      healthy = true;
     } catch {
       await sleep(250);
     }
   }
-  if (!up) throw new Error("server did not become healthy in time");
+  if (!healthy) throw new Error("server did not become healthy in time");
+
+  // --- settings -------------------------------------------------------------
+  const settings = await jsonFetch("/api/app/settings");
+  check("settings.app_name", settings.data.public_settings.app_name, "momenti.co");
+
+  // --- register -> OTP -> verify -> me --------------------------------------
+  const reg = await jsonFetch("/api/auth/register", {
+    method: "POST",
+    body: { email: "smoke@test.dev", password: "secret123" },
+  });
+  check("register.status", reg.status, 201);
+  check("register.dev_otp_len", String(reg.data.dev_otp).length, 6);
+
+  const badOtp = await jsonFetch("/api/auth/verify-otp", {
+    method: "POST",
+    body: { email: "smoke@test.dev", otpCode: "000000" },
+  });
+  check("verify.wrong_otp_status", badOtp.status, 401);
+
+  const ver = await jsonFetch("/api/auth/verify-otp", {
+    method: "POST",
+    body: { email: "smoke@test.dev", otpCode: reg.data.dev_otp },
+  });
+  check("verify.status", ver.status, 200);
+  const token = ver.data.access_token;
+  check("verify.token_present", typeof token === "string" && token.includes("."), true);
+
+  const authHeaders = { Authorization: `Bearer ${token}` };
+  const me = await jsonFetch("/api/auth/me", { headers: authHeaders });
+  check("me.email", me.data.email, "smoke@test.dev");
+  check("me.role", me.data.role, "member");
+
+  const badLogin = await jsonFetch("/api/auth/login", {
+    method: "POST",
+    body: { email: "smoke@test.dev", password: "wrong-password" },
+  });
+  check("login.wrong_password_status", badLogin.status, 401);
+  const goodLogin = await jsonFetch("/api/auth/login", {
+    method: "POST",
+    body: { email: "smoke@test.dev", password: "secret123" },
+  });
+  check("login.status", goodLogin.status, 200);
+
   // --- invitation CRUD + guards ----------------------------------------------
   const anonCreate = await jsonFetch("/api/entities/invitations", {
     method: "POST",
@@ -119,4 +162,33 @@ try {
   check("delete.ok", del.data.ok, true);
   const afterDelete = (await jsonFetch("/api/entities/invitations?sort=-created_date")).data;
   check("list.after_delete_count", afterDelete.length, 1);
-/*__MORE_SMOKE_2__*/
+
+  // --- uploads ----------------------------------------------------------------
+  const PNG =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const up = await jsonFetch("/api/uploads", {
+    method: "POST",
+    headers: authHeaders,
+    body: { filename: "dot.png", data: PNG },
+  });
+  check("upload.file_url_prefix", String(up.data.file_url).startsWith("/uploads/"), true);
+  const imgRes = await fetch(BASE + up.data.file_url);
+  check("upload.served_content_type", imgRes.headers.get("content-type"), "image/png");
+
+  const anonUpload = await jsonFetch("/api/uploads", {
+    method: "POST",
+    body: { filename: "dot.png", data: PNG },
+  });
+  check("upload.anonymous_status", anonUpload.status, 401);
+
+  const traversal = await fetch(`${BASE}/uploads/..%2Fdb.json`);
+  check("traversal.blocked", [400, 404].includes(traversal.status), true);
+
+  console.log(failures ? `\n${failures} check(s) FAILED` : "\nALL CHECKS PASSED");
+  process.exitCode = failures ? 1 : 0;
+} catch (err) {
+  console.error("SMOKE ERROR:", err);
+  process.exitCode = 1;
+} finally {
+  server.kill();
+}

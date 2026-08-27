@@ -5,7 +5,7 @@ import { Image } from "@/components/ui/image";
 const eventTypes = ["WEDDING", "GALA", "SOIRÉE", "ANNIVERSARY", "ENGAGEMENT", "CELEBRATION"];
 
 const ENVELOPE_URL =
-  "https://media.base44.com/images/public/6a8fad05283e563f370d4093/eda2d0b14_generated_6fecf10c.png";
+  "/media/eda2d0b14_generated_6fecf10c.png";
 
 export default function Hero() {
   const ref = useRef(null);

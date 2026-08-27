@@ -65,7 +65,7 @@ function loadSecret() {
   return secret;
 }
 
-let DB = { users: [], invitations: [], pendingOtps: {}, pendingResets: {} };
+let DB = { users: [], invitations: [], pendingOtps: {}, pendingRegs: {}, pendingResets: {} };
 function loadDb() {
   try {
     const parsed = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
@@ -73,6 +73,7 @@ function loadDb() {
       users: Array.isArray(parsed.users) ? parsed.users : [],
       invitations: Array.isArray(parsed.invitations) ? parsed.invitations : [],
       pendingOtps: parsed.pendingOtps || {},
+      pendingRegs: parsed.pendingRegs || {},
       pendingResets: parsed.pendingResets || {},
     };
   } catch {
@@ -303,9 +304,13 @@ async function handleRegister(req, res) {
     throw new HttpError(400, "Password must be at least 8 characters");
   }
   if (findUserByEmail(email)) throw new HttpError(409, "An account with this email already exists");
+  // No mailer exists locally, so verification cannot deliver an emailed code
+  // through a hosted flow — queue the credentials until the OTP is verified
+  // (handleVerifyOtp), surfacing the code via DEV_HELPERS meanwhile.
+  DB.pendingRegs[email] = { passwordHash: hashPassword(String(body.password)), expiresAt: Date.now() + OTP_TTL_MS };
   const otp = createOtp(email);
   const resp = { otp_sent: true };
-  if (DEV_HELPERS) resp.dev_otp = otp; // no mailer locally: surface the code
+  if (DEV_HELPERS) resp.dev_otp = otp;
   sendJson(res, 201, resp);
 }
 
@@ -314,17 +319,23 @@ async function handleVerifyOtp(req, res) {
   const email = requireEmail(body);
   consumeOtp(email, String(body.otpCode ?? body.otp_code ?? body.code ?? ""));
 
+  const pendingReg = DB.pendingRegs[email];
+  delete DB.pendingRegs[email];
+
   let user = findUserByEmail(email);
   if (user) {
+    // Verifying an address that already belongs to an account (e.g. re-run of
+    // the register page): never clobber the existing password.
     user.email_verified = true;
   } else {
-    // Verification without a prior register() call: create an account whose
-    // password cannot be guessed (the caller normally passed one through
-    // register(); this path only guards edge-case replay).
+    const expiresAt = pendingReg?.expiresAt || 0;
+    if (!pendingReg || expiresAt < Date.now()) {
+      throw new HttpError(400, "Registration window expired. Please sign up again.");
+    }
     user = {
       id: crypto.randomUUID(),
       email,
-      password_hash: hashPassword(crypto.randomBytes(32).toString("hex")),
+      password_hash: pendingReg.passwordHash,
       role: "member",
       created_date: new Date().toISOString(),
       email_verified: true,

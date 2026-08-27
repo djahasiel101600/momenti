@@ -17,7 +17,7 @@ import { Navigate } from 'react-router-dom';
 // Add page imports here
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
 
   // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
@@ -29,13 +29,28 @@ const AuthenticatedApp = () => {
   }
 
   // Handle authentication errors
-  if (authError) {
-    if (authError.type === 'auth_required') {
-      // Redirect to login automatically
-      navigateToLogin();
-      return null;
-    }
+  if (authError && authError.type !== 'auth_required') {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
+        <div className="max-w-md w-full p-8 bg-white rounded-lg shadow-lg border border-slate-100 text-center">
+          <h1 className="text-xl font-semibold text-slate-900">Something went wrong</h1>
+          <p className="mt-3 text-sm text-slate-600">{authError.message}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-6 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
   }
+
+  // Note: auth_required deliberately falls through to the router. Public
+  // pages (/, /login, /register, /:slug …) must render normally, and
+  // protected ones redirect through ProtectedRoute. Auto-navigating here
+  // caused a /login -> /login?returnTo=/login… redirect loop whenever a
+  // stale token was rejected after a server restart.
 
   // Render the main app
   return (

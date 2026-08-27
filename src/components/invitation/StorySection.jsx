@@ -1,26 +1,39 @@
-import { useRef } from "react";
+﻿import { useRef } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Image } from "@/components/ui/image";
+import { emphasizedHeading, mixHex, resolveSectionAppearance } from "@/lib/templates";
 
-export default function StorySection({ data }) {
+// Falls back to the built-in momenti copy when no override is provided,
+// keeping standalone usage of the component working.
+const DEFAULT_STORY_HEADING = "How we met.";
+
+export default function StorySection({ data, eyebrow = "Our Story", heading, appearance }) {
   const ref = useRef(null);
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ["start end", "end start"],
   });
-  // background transitions pearl -> dusty rose -> pearl
+
+  // Per-section appearance: concrete hex values drive the scroll gradient
+  // (a CSS variable cannot be interpolated by framer), while `style` scopes
+  // --inv-paper / --inv-paper-ink / --inv-accent for everything inside.
+  const app = appearance || resolveSectionAppearance(data, "story");
+
   const bg = useTransform(
     scrollYProgress,
     [0, 0.5, 1],
-    ["#F2F0ED", "#E8D9D4", "#F2F0ED"]
+    [app.hex.paper, mixHex(app.hex.paper, app.hex.ink, 0.08), app.hex.paper]
   );
 
   const imgScale = useTransform(scrollYProgress, [0, 1], [1.1, 1]);
 
+  // Last word carries the signature italic emphasis (["How we ", "met."]).
+  const [lead, tail] = emphasizedHeading(heading || DEFAULT_STORY_HEADING) || [];
+
   return (
     <motion.section
       ref={ref}
-      style={{ backgroundColor: bg }}
+      style={{ backgroundColor: bg, ...app.style }}
       className="relative px-6 md:px-16 py-28 md:py-40 transition-colors"
     >
       <div className="mx-auto max-w-[1200px] grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-20 items-center">
@@ -35,7 +48,7 @@ export default function StorySection({ data }) {
             <motion.div style={{ scale: imgScale }} className="w-full h-full">
               <Image
                 src={data.storyImage}
-                alt="Intimate close-up of the couple holding hands in front of a stone archway"
+                alt={`A quiet moment from the story of ${data.couple || "us"}`}
                 fittingType="fill"
                 className="w-full h-full object-cover"
               />
@@ -51,23 +64,26 @@ export default function StorySection({ data }) {
         </motion.div>
 
         <div className="order-1 md:order-2">
-          <motion.span
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-[11px] tracking-luxe uppercase inv-accent"
-          >
-            Our Story
-          </motion.span>
+          {eyebrow && (
+            <motion.span
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="text-[11px] tracking-luxe uppercase inv-accent"
+            >
+              {eyebrow}
+            </motion.span>
+          )}
           <motion.h2
             initial={{ opacity: 0, x: 50 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-            className="font-serif-display font-light text-4xl md:text-6xl leading-tight mt-6 inv-ink"
+            className="font-serif-display font-light text-4xl md:text-6xl leading-tight mt-6"
           >
-            How we <span className="italic">met.</span>
+            {lead}
+            <span className="italic">{tail}</span>
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 30 }}

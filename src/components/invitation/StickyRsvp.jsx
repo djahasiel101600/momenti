@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function StickyRsvp() {
+export default function StickyRsvp({ label = "RSVP" }) {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export default function StickyRsvp() {
           transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           className="fixed bottom-6 right-6 z-50 inv-accent-bg inv-ink px-6 py-4 text-xs tracking-luxe-sm uppercase inv-accent-shadow inv-accent-hover transition-colors"
         >
-          RSVP
+          {label}
         </motion.a>
       )}
     </AnimatePresence>

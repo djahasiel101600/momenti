@@ -59,6 +59,10 @@ export const AuthProvider = ({ children }) => {
       setAuthChecked(true);
 
       if (error.status === 401 || error.status === 403) {
+        // Dead/expired token: drop it immediately so the next boot does not
+        // probe /me with it again (repeated 401s fed the /login redirect
+        // loop reported after server restarts).
+        base44.auth.clearToken();
         setAuthError({
           type: 'auth_required',
           message: 'Authentication required'

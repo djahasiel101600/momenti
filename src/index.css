@@ -83,7 +83,8 @@
     scrollbar-width: none;
   }
 
-  /* Invitation theme tokens — set --inv-accent / --inv-bg on the page wrapper. */
+  /* Invitation theme tokens — set --inv-accent / --inv-bg / --inv-text on the
+     page wrapper (Invitation.jsx). Defaults keep unsaved previews usable. */
   .inv-accent { color: var(--inv-accent, #C58A58); }
   .inv-accent-bg { background-color: var(--inv-accent, #C58A58); }
   .inv-accent-border { border-color: var(--inv-accent, #C58A58); }
@@ -95,14 +96,78 @@
   .inv-accent-border-40 { border-color: color-mix(in srgb, var(--inv-accent, #C58A58) 40%, transparent); }
   .inv-bg { background-color: var(--inv-bg, #0A0A0A); }
   .inv-bg-90 { background-color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 90%, transparent); }
-  .inv-ink { color: var(--inv-bg, #0A0A0A); }
-  .inv-ink-40 { color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 40%, transparent); }
-  .inv-ink-50 { color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 50%, transparent); }
-  .inv-ink-60 { color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 60%, transparent); }
-  .inv-ink-70 { color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 70%, transparent); }
-  .inv-ink-bg-10 { background-color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 10%, transparent); }
-  .inv-ink-bg-20 { background-color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 20%, transparent); }
+  .inv-ink { color: var(--inv-paper-ink, var(--inv-bg, #0A0A0A)); }
+  .inv-ink-40 { color: color-mix(in srgb, var(--inv-paper-ink, var(--inv-bg, #0A0A0A)) 40%, transparent); }
+  .inv-ink-50 { color: color-mix(in srgb, var(--inv-paper-ink, var(--inv-bg, #0A0A0A)) 50%, transparent); }
+  .inv-ink-60 { color: color-mix(in srgb, var(--inv-paper-ink, var(--inv-bg, #0A0A0A)) 60%, transparent); }
+  .inv-ink-70 { color: color-mix(in srgb, var(--inv-paper-ink, var(--inv-bg, #0A0A0A)) 70%, transparent); }
+  .inv-ink-bg-10 { background-color: color-mix(in srgb, var(--inv-paper-ink, var(--inv-bg, #0A0A0A)) 10%, transparent); }
+  .inv-ink-bg-20 { background-color: color-mix(in srgb, var(--inv-paper-ink, var(--inv-bg, #0A0A0A)) 20%, transparent); }
+
+  /* Per-section light panel: each section resolves --inv-paper /
+     --inv-paper-ink / --inv-accent via resolveSectionAppearance(), letting
+     users restyle backgrounds independently without losing readable text
+     (unset values fall back to the invitation-wide defaults). */
+  .inv-paper {
+    background-color: var(--inv-paper, #F2F0ED);
+    color: var(--inv-paper-ink, #141414);
+  }
+  .inv-card {
+    background-color: var(--inv-paper, #F2F0ED);
+  }
+
+  /* Dark-section typography driven by the user-chosen text color (--inv-text).
+     Mirrors the hardcoded #F2F0ED shades these replace. */
+  .inv-text { color: var(--inv-text, #F2F0ED); }
+  .inv-text-80 { color: color-mix(in srgb, var(--inv-text, #F2F0ED) 80%, transparent); }
+  .inv-text-70 { color: color-mix(in srgb, var(--inv-text, #F2F0ED) 70%, transparent); }
+  .inv-text-60 { color: color-mix(in srgb, var(--inv-text, #F2F0ED) 60%, transparent); }
+  .inv-text-50 { color: color-mix(in srgb, var(--inv-text, #F2F0ED) 50%, transparent); }
+  .inv-text-40 { color: color-mix(in srgb, var(--inv-text, #F2F0ED) 40%, transparent); }
+  .inv-text-30 { color: color-mix(in srgb, var(--inv-text, #F2F0ED) 30%, transparent); }
+  .inv-text-border-20 { border-color: color-mix(in srgb, var(--inv-text, #F2F0ED) 20%, transparent); }
+  .inv-text-border-50 { border-color: color-mix(in srgb, var(--inv-text, #F2F0ED) 50%, transparent); }
+  .inv-text-placeholder::placeholder {
+    color: color-mix(in srgb, var(--inv-text, #F2F0ED) 30%, transparent);
+  }
+
+  /* Composite form controls for the dark invitation surfaces. */
+  .inv-field {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--inv-text, #F2F0ED) 20%, transparent);
+    border-radius: 0;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    color: var(--inv-text, #F2F0ED);
+    outline: none;
+    transition: border-color 150ms ease;
+  }
+  .inv-field:focus { border-bottom-color: var(--inv-accent, #C58A58); }
+  .inv-field::placeholder {
+    color: color-mix(in srgb, var(--inv-text, #F2F0ED) 30%, transparent);
+  }
+  .inv-field option { color: #0A0A0A; background: #FFFFFF; }
+  .inv-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.32em;
+    color: color-mix(in srgb, var(--inv-text, #F2F0ED) 40%, transparent);
+  }
+
+  /* Optional sans-serif treatment for display type across the public page. */
+  [data-display-font="sans"] .font-serif-display {
+    font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  [data-display-font="sans"] .font-serif-display.italic {
+    font-style: italic;
+  }
+
   .inv-hero-overlay {
+
     background-image: linear-gradient(
       to bottom,
       color-mix(in srgb, var(--inv-bg, #0A0A0A) 40%, transparent),

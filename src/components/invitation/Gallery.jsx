@@ -2,23 +2,29 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Image } from "@/components/ui/image";
 import { X } from "lucide-react";
+import { emphasizedHeading } from "@/lib/templates";
 
-export default function Gallery({ data }) {
+const DEFAULT_GALLERY_HEADING = "The gallery.";
+
+export default function Gallery({ data, eyebrow = "Moments", heading, appearance }) {
   const [active, setActive] = useState(null);
+  const [lead, tail] = emphasizedHeading(heading || DEFAULT_GALLERY_HEADING) || [];
 
   return (
-    <section className="bg-[#F2F0ED] inv-ink py-28 md:py-40 px-6 md:px-16">
+    <section className="inv-paper py-28 md:py-40 px-6 md:px-16" style={appearance?.style}>
       <div className="mx-auto max-w-[1200px]">
         <div className="text-center mb-16">
-          <motion.span
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-[11px] tracking-luxe uppercase inv-accent"
-          >
-            Moments
-          </motion.span>
+          {eyebrow && (
+            <motion.span
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="text-[11px] tracking-luxe uppercase inv-accent"
+            >
+              {eyebrow}
+            </motion.span>
+          )}
           <motion.h2
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -26,7 +32,8 @@ export default function Gallery({ data }) {
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
             className="font-serif-display font-light text-4xl md:text-6xl mt-4"
           >
-            The <span className="italic">gallery.</span>
+            {lead}
+            <span className="italic">{tail}</span>
           </motion.h2>
         </div>
 
@@ -65,7 +72,7 @@ export default function Gallery({ data }) {
             className="fixed inset-0 z-[90] inv-bg-90 backdrop-blur-sm flex items-center justify-center p-6"
           >
             <button
-              className="absolute top-6 right-6 text-[#F2F0ED]/70 hover:text-[var(--inv-accent)] transition-colors"
+              className="absolute top-6 right-6 inv-text-70 hover:text-[var(--inv-accent)] transition-colors"
               onClick={() => setActive(null)}
               aria-label="Close"
             >

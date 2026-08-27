@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { emphasizedHeading } from "@/lib/templates";
 
-export default function RsvpForm({ data }) {
+const DEFAULT_RSVP_HEADING = "Will you join us?";
+
+export default function RsvpForm({ data, eyebrow = "The Guest Ledger", heading, appearance }) {
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -9,6 +12,13 @@ export default function RsvpForm({ data }) {
     attendance: "accepts",
     guests: "1",
   });
+
+  const [lead, tail] = emphasizedHeading(heading || DEFAULT_RSVP_HEADING) || [];
+
+  // Guest options honor the host's configured maximum (1..10).
+  const guestOptions = Array.from({ length: data.rsvpMaxGuests || 5 }, (_, i) =>
+    String(i + 1)
+  );
 
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -18,7 +28,7 @@ export default function RsvpForm({ data }) {
   };
 
   return (
-    <section id="rsvp" className="inv-bg text-[#F2F0ED] py-28 md:py-40 px-6">
+    <section id="rsvp" className="inv-bg inv-text py-28 md:py-40 px-6" style={appearance?.style}>
       <div className="mx-auto max-w-xl text-center">
         <AnimatePresence mode="wait">
           {!submitted ? (
@@ -27,15 +37,17 @@ export default function RsvpForm({ data }) {
               exit={{ opacity: 0, scale: 0.96 }}
               transition={{ duration: 0.5 }}
             >
-              <motion.span
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6 }}
-                className="text-[11px] tracking-luxe uppercase inv-accent"
-              >
-                The Guest Ledger
-              </motion.span>
+              {eyebrow && (
+                <motion.span
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.6 }}
+                  className="text-[11px] tracking-luxe uppercase inv-accent"
+                >
+                  {eyebrow}
+                </motion.span>
+              )}
               <motion.h2
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -43,8 +55,14 @@ export default function RsvpForm({ data }) {
                 transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
                 className="font-serif-display font-light text-4xl md:text-6xl mt-4"
               >
-                Will you <span className="italic inv-accent">join us?</span>
+                {lead} <span className="italic inv-accent">{tail}</span>
               </motion.h2>
+
+              {data.rsvpNote && (
+                <p className="mt-6 text-sm inv-text-70 leading-relaxed whitespace-pre-line">
+                  {data.rsvpNote}
+                </p>
+              )}
 
               <form onSubmit={handleSubmit} className="mt-14 space-y-10 text-left">
                 <Field label="Full Name">
@@ -52,7 +70,7 @@ export default function RsvpForm({ data }) {
                     required
                     value={form.name}
                     onChange={(e) => update("name", e.target.value)}
-                    className="w-full bg-transparent border-0 border-b border-[#F2F0ED]/20 focus:border-[var(--inv-accent)] focus:ring-0 outline-none py-3 text-[#F2F0ED] placeholder-[#F2F0ED]/30 transition-colors"
+                    className="inv-field"
                     placeholder="Your name"
                   />
                 </Field>
@@ -63,7 +81,7 @@ export default function RsvpForm({ data }) {
                     type="email"
                     value={form.email}
                     onChange={(e) => update("email", e.target.value)}
-                    className="w-full bg-transparent border-0 border-b border-[#F2F0ED]/20 focus:border-[var(--inv-accent)] focus:ring-0 outline-none py-3 text-[#F2F0ED] placeholder-[#F2F0ED]/30 transition-colors"
+                    className="inv-field"
                     placeholder="you@email.com"
                   />
                 </Field>
@@ -79,7 +97,7 @@ export default function RsvpForm({ data }) {
                         className={`flex-1 cursor-pointer border px-5 py-4 text-sm tracking-wide transition-colors ${
                           form.attendance === o.v
                             ? "inv-accent-border inv-accent"
-                            : "border-[#F2F0ED]/20 text-[#F2F0ED]/60 hover:border-[#F2F0ED]/50"
+                            : "inv-text-border-20 inv-text-60 hover:inv-text-border-50"
                         }`}
                       >
                         <input
@@ -100,9 +118,9 @@ export default function RsvpForm({ data }) {
                   <select
                     value={form.guests}
                     onChange={(e) => update("guests", e.target.value)}
-                    className="w-full bg-transparent border-0 border-b border-[#F2F0ED]/20 focus:border-[var(--inv-accent)] outline-none py-3 text-[#F2F0ED] transition-colors"
+                    className="inv-field"
                   >
-                    {["1", "2", "3", "4", "5"].map((n) => (
+                    {guestOptions.map((n) => (
                       <option key={n} value={n} className="inv-bg">
                         {n}
                       </option>
@@ -150,7 +168,7 @@ export default function RsvpForm({ data }) {
               </div>
               <motion.p
                 initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                animate={{ opacity: 1 }}
                 transition={{ delay: 0.4, duration: 0.6 }}
                 className="font-serif-display text-3xl md:text-4xl"
               >
@@ -160,7 +178,7 @@ export default function RsvpForm({ data }) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.6, duration: 0.6 }}
-                className="mt-4 text-sm text-[#F2F0ED]/50"
+                className="mt-4 text-sm inv-text-50"
               >
                 {form.attendance === "accepts"
                   ? "We can't wait to celebrate with you."
@@ -177,7 +195,7 @@ export default function RsvpForm({ data }) {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="text-[10px] tracking-luxe uppercase text-[#F2F0ED]/40">{label}</span>
+      <span className="inv-label">{label}</span>
       <div className="mt-2">{children}</div>
     </label>
   );
