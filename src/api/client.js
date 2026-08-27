@@ -1,0 +1,269 @@
+// Local replacement for the Base44 SDK client. Exposes the exact call surface
+// the app was written against — base44.auth.*, base44.entities.Invitation.*,
+// base44.integrations.Core.UploadFile — but everything talks to this repo's
+// own Node backend (server/api.mjs) instead of Base44.
+//
+// The exported name stays `base44` so call sites only change their import
+// path; method names stay identical for the same reason.
+
+const TOKEN_KEY = "momenti_token";
+
+const API_BASE = "/api";
+
+export class ApiError extends Error {
+  constructor(status, message, data) {
+    super(message);
+    this.status = status;
+    this.data = data;
+  }
+}
+
+export function getToken() {
+  try {
+    return window.localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setToken(token) {
+  try {
+    if (token) window.localStorage.setItem(TOKEN_KEY, token);
+    else window.localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* storage unavailable (private mode): session lives for the tab only */
+  }
+}
+
+export const clearToken = () => setToken(null);
+
+/**
+ * Low-level JSON fetch against the local API.
+ *
+ * @param {string} path Path under /api, e.g. "/auth/login"
+ * @param {{ method?: string, body?: unknown, auth?: boolean }} [options]
+ * @returns {Promise<any>} parsed JSON response
+ */
+async function request(path, { method = "GET", body, auth = false } = {}) {
+  /** @type {Record<string, string>} */
+  const headers = {};
+  let payload;
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    payload = JSON.stringify(body);
+  }
+  const token = getToken();
+  if (auth && token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, { method, headers, body: payload });
+
+  let data = null;
+  const raw = await res.text();
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = { error: raw };
+    }
+  }
+
+  if (!res.ok) {
+    throw new ApiError(res.status, data?.error || `Request failed (${res.status})`, data);
+  }
+  return data;
+}
+
+// --- Auth ---------------------------------------------------------------------
+
+async function me() {
+  // Throws an ApiError with status 401 when signed out — callers rely on it.
+  return request("/auth/me", { auth: true });
+}
+
+/** Returns { access_token, ...user } after validating `email + otpCode`. */
+async function verifyOtp({ email, otpCode }) {
+  return request("/auth/verify-otp", { method: "POST", body: { email, otpCode } });
+}
+
+/** Signs in; the access token is stored automatically like the SDK did. */
+async function loginViaEmailPassword(email, password) {
+  const result = await request("/auth/login", {
+    method: "POST",
+    body: { email, password },
+  });
+  if (result?.access_token) setToken(result.access_token);
+  return result;
+}
+
+/** Creates the account and emails-equivalent OTP; response may carry dev_otp. */
+async function register({ email, password }) {
+  return request("/auth/register", { method: "POST", body: { email, password } });
+}
+
+async function resendOtp(email) {
+  return request("/auth/resend-otp", { method: "POST", body: { email } });
+}
+
+async function resetPasswordRequest(email) {
+  // Response may carry dev_reset_link since there is no SMTP locally.
+  return request("/auth/reset-password-request", { method: "POST", body: { email } });
+}
+
+async function resetPassword(resetToken, newPassword) {
+  return request("/auth/reset-password", {
+    method: "POST",
+    body: { resetToken, newPassword },
+  });
+}
+
+/**
+ * Clears the local session. The optional argument mirrors the SDK signature:
+ * when given, the browser lands on /login carrying ?returnTo=… so the
+ * caller can resume there afterwards; without it nothing navigates (the
+ * "clear token only" case). There is no platform logout page locally —
+ * dropping the token IS the entire logout.
+ */
+async function logout(redirectTarget) {
+  clearToken();
+  let destination = null;
+  if (typeof redirectTarget === "string") {
+    try {
+      const url = new URL(redirectTarget, window.location.origin);
+      if (url.origin === window.location.origin && !url.pathname.startsWith("//")) {
+        destination = url.pathname;
+      }
+    } catch {
+      /* ignore malformed targets */
+    }
+  }
+  if (!destination || destination === window.location.pathname) return;
+  window.location.assign("/login?returnTo=" + encodeURIComponent(destination));
+}
+
+function redirectToLogin(currentLocation) {
+  // Preserves the source path like the SDK flow did (?returnTo=…).
+  let pathPart = "/";
+  try {
+    const url = new URL(currentLocation || window.location.href, window.location.origin);
+    pathPart = url.pathname + url.search;
+  } catch {
+    /* fall back below */
+  }
+  if (!pathPart.startsWith("/") || pathPart.startsWith("//")) pathPart = "/";
+  window.location.assign("/login?returnTo=" + encodeURIComponent(pathPart));
+}
+
+// Provider sign-in cannot exist detached from Base44 (no OAuth broker);
+// kept as an explicit failure so accidental call sites fail loudly in dev.
+async function loginWithProvider(provider) {
+  throw new ApiError(
+    400,
+    `Provider sign-in (${provider}) is unavailable in self-hosted mode. Use email & password.`
+  );
+}
+// --- Entities -------------------------------------------------------------------
+
+function toQuery(params) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  return search.toString();
+}
+
+/** CRUD over Invitation records, mirroring the Base44 entity API shape. */
+const invitationEntity = {
+  /** list("-created_date", 50) -> newest-first array */
+  async list(sort, limit) {
+    const qs = toQuery({ sort, limit });
+    return request(`/entities/invitations${qs ? `?${qs}` : ""}`);
+  },
+
+  /** filter({ slug }, "-created_date", 1) -> matching array */
+  async filter(query, sort, limit) {
+    const qs = toQuery({ ...(query || {}), sort, limit });
+    return request(`/entities/invitations${qs ? `?${qs}` : ""}`);
+  },
+
+  async get(id) {
+    return request(`/entities/invitations/${encodeURIComponent(id)}`);
+  },
+
+  async create(payload) {
+    return request("/entities/invitations", { method: "POST", body: payload, auth: true });
+  },
+
+  async update(id, payload) {
+    return request(`/entities/invitations/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: payload,
+      auth: true,
+    });
+  },
+
+  async delete(id) {
+    return request(`/entities/invitations/${encodeURIComponent(id)}`, { method: "DELETE", auth: true });
+  },
+};
+
+// --- Integrations ---------------------------------------------------------------
+
+/**
+ * Drop-in for base44.integrations.Core.UploadFile({ file }).
+ * Reads the File in the browser as a data URL and posts it as JSON; the
+ * server decodes it into server/data/uploads and returns the public URL.
+ * Resolves to { file_url } like the original did.
+ */
+async function uploadFile({ file }) {
+  if (!file) throw new ApiError(400, "No file provided");
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new ApiError(400, "Could not read file"));
+    reader.readAsDataURL(file);
+  });
+  const result = await request("/uploads", {
+    method: "POST",
+    body: { filename: file.name, data: dataUrl },
+    auth: true,
+  });
+  return { file_url: result.file_url || result.url };
+}
+
+// --- Public surface (same shape the Base44 SDK exposed) -------------------------
+
+export const api = {
+  auth: {
+    register,
+    verifyOtp,
+    resendOtp,
+    loginViaEmailPassword,
+    loginWithProvider,
+    resetPasswordRequest,
+    resetPassword,
+    me,
+    logout,
+    redirectToLogin,
+    setToken,
+    getToken,
+    clearToken,
+  },
+  entities: {
+    Invitation: invitationEntity,
+  },
+  integrations: {
+    Core: {
+      UploadFile: uploadFile,
+    },
+  },
+};
+
+// Historical export name — every call site imports `{ base44 }`. Kept so the
+// migration off Base44 touches import paths only.
+export { api as base44 };
+
+export default api;
+
+
+

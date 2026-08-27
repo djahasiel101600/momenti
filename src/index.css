@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 42 9% 94%;
+    --foreground: 0 0% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 4%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 4%;
+    --primary: 0 0% 4%;
+    --primary-foreground: 42 9% 94%;
+    --secondary: 42 7% 88%;
+    --secondary-foreground: 0 0% 4%;
+    --muted: 42 7% 88%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 25 53% 56%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 30 6% 82%;
+    --input: 30 6% 82%;
+    --ring: 25 53% 56%;
+    --radius: 0.25rem;
+
+    /* momenti palette */
+    --obsidian: 0 0% 4%;
+    --pearl: 42 9% 94%;
+    --copper: 25 53% 56%;
+    --muted-meta: 0 0% 55%;
+
+    --font-heading: "Cormorant Garamond", ui-serif, Georgia, serif;
+    --font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
+    --font-display: "Cormorant Garamond", ui-serif, Georgia, serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+    font-feature-settings: "ss01", "cv01";
+  }
+}
+
+@layer utilities {
+  .font-serif-display {
+    font-family: "Cormorant Garamond", ui-serif, Georgia, serif;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  .tracking-luxe {
+    letter-spacing: 0.32em;
+  }
+  .tracking-luxe-sm {
+    letter-spacing: 0.22em;
+  }
+  /* thin self-drawing rule line */
+  .rule-line {
+    background: currentColor;
+    height: 0.5px;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Invitation theme tokens — set --inv-accent / --inv-bg on the page wrapper. */
+  .inv-accent { color: var(--inv-accent, #C58A58); }
+  .inv-accent-bg { background-color: var(--inv-accent, #C58A58); }
+  .inv-accent-border { border-color: var(--inv-accent, #C58A58); }
+  .inv-accent-hover:hover { background-color: color-mix(in srgb, var(--inv-accent, #C58A58) 82%, white); }
+  .inv-accent-20 { color: color-mix(in srgb, var(--inv-accent, #C58A58) 20%, transparent); }
+  .inv-accent-40 { color: color-mix(in srgb, var(--inv-accent, #C58A58) 40%, transparent); }
+  .inv-accent-bg-20 { background-color: color-mix(in srgb, var(--inv-accent, #C58A58) 20%, transparent); }
+  .inv-accent-bg-40 { background-color: color-mix(in srgb, var(--inv-accent, #C58A58) 40%, transparent); }
+  .inv-accent-border-40 { border-color: color-mix(in srgb, var(--inv-accent, #C58A58) 40%, transparent); }
+  .inv-bg { background-color: var(--inv-bg, #0A0A0A); }
+  .inv-bg-90 { background-color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 90%, transparent); }
+  .inv-ink { color: var(--inv-bg, #0A0A0A); }
+  .inv-ink-40 { color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 40%, transparent); }
+  .inv-ink-50 { color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 50%, transparent); }
+  .inv-ink-60 { color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 60%, transparent); }
+  .inv-ink-70 { color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 70%, transparent); }
+  .inv-ink-bg-10 { background-color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 10%, transparent); }
+  .inv-ink-bg-20 { background-color: color-mix(in srgb, var(--inv-bg, #0A0A0A) 20%, transparent); }
+  .inv-hero-overlay {
+    background-image: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--inv-bg, #0A0A0A) 40%, transparent),
+      transparent,
+      color-mix(in srgb, var(--inv-bg, #0A0A0A) 70%, transparent)
+    );
+  }
+  .inv-accent-shadow {
+    box-shadow: 0 10px 40px -10px color-mix(in srgb, var(--inv-accent, #C58A58) 60%, transparent);
+  }
+}
+
+/* Reduced motion respect */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

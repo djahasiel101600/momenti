@@ -1,0 +1,17 @@
+{
+  "name": "momenti.co",
+  "short_name": "momenti",
+  "description": "Editorial, animated digital invitations for weddings, galas, and the moments that matter.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0A",
+  "theme_color": "#0A0A0A",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
