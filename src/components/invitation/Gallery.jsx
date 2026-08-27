@@ -2,6 +2,8 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Image } from "@/components/ui/image";
 import { X } from "lucide-react";
+import MediaBlock from "@/components/invitation/MediaBlock";
+import { mediaTypeFromUrl } from "@/lib/templates";
 import { emphasizedHeading } from "@/lib/templates";
 
 const DEFAULT_GALLERY_HEADING = "The gallery.";
@@ -50,11 +52,11 @@ export default function Gallery({ data, eyebrow = "Moments", heading, appearance
                 g.span === "tall" ? "row-span-2" : "col-span-2"
               }`}
             >
-              <Image
+              <MediaBlock
                 src={g.url}
                 alt={g.alt}
-                fittingType="fill"
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                className="w-full h-full"
+                mediaClassName="transition-transform duration-700 group-hover:scale-105"
               />
               <div className="absolute inset-0 bg-transparent group-hover:bg-black/20 transition-colors duration-500" />
             </motion.button>
@@ -86,12 +88,23 @@ export default function Gallery({ data, eyebrow = "Moments", heading, appearance
               onClick={(e) => e.stopPropagation()}
               className="relative max-w-3xl w-full"
             >
-              <Image
-                src={active.url}
-                alt={active.alt}
-                fittingType="fit"
-                className="w-full max-h-[80vh] rounded-sm"
-              />
+              {mediaTypeFromUrl(active.url) === "video" ? (
+                <video
+                  src={active.url}
+                  controls
+                  autoPlay
+                  playsInline
+                  className="w-full max-h-[80vh] rounded-sm bg-black"
+                  aria-label={active.alt || undefined}
+                />
+              ) : (
+                <Image
+                  src={active.url}
+                  alt={active.alt}
+                  fittingType="fit"
+                  className="w-full max-h-[80vh] rounded-sm"
+                />
+              )}
             </motion.div>
           </motion.div>
         )}

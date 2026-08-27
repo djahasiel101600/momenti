@@ -1,7 +1,8 @@
-﻿import { useRef } from "react";
+import { useRef } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { Image } from "@/components/ui/image";
+
 import { emphasizedHeading, mixHex, resolveSectionAppearance } from "@/lib/templates";
+import MediaBlock from "@/components/invitation/MediaBlock";
 
 // Falls back to the built-in momenti copy when no override is provided,
 // keeping standalone usage of the component working.
@@ -46,11 +47,10 @@ export default function StorySection({ data, eyebrow = "Our Story", heading, app
         >
           <div className="relative overflow-hidden rounded-sm aspect-[3/4]">
             <motion.div style={{ scale: imgScale }} className="w-full h-full">
-              <Image
+              <MediaBlock
                 src={data.storyImage}
                 alt={`A quiet moment from the story of ${data.couple || "us"}`}
-                fittingType="fill"
-                className="w-full h-full object-cover"
+                className="w-full h-full"
               />
             </motion.div>
           </div>

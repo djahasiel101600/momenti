@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { Image } from "@/components/ui/image";
+import MediaBlock from "@/components/invitation/MediaBlock";
 
 export default function InvitationHero({ data }) {
   const ref = useRef(null);
@@ -28,11 +28,10 @@ export default function InvitationHero({ data }) {
   return (
     <section ref={ref} className="relative h-screen min-h-[640px] overflow-hidden inv-bg">
       <motion.div style={{ scale, y }} className="absolute inset-0">
-        <Image
+        <MediaBlock
           src={data.heroImage}
           alt={`Scene backdrop for ${data.couple || "the celebration"}`}
-          fittingType="fill"
-          className="w-full h-full object-cover"
+          className="w-full h-full"
         />
         <div className="absolute inset-0 inv-hero-overlay" />
       </motion.div>

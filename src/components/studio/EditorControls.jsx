@@ -155,3 +155,18 @@ export function OptionalColorField({ label, value, onChange, inheritHint }) {
     </div>
   );
 }
+
+/** Checkbox pill styled like the rest of the dark editor surfaces. */
+export function CheckOption({ label, checked, onChange }) {
+  return (
+    <label className="inline-flex items-center gap-2 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="accent-[#C58A58] w-4 h-4"
+      />
+      <span className="text-xs text-[#F2F0ED]/70">{label}</span>
+    </label>
+  );
+}

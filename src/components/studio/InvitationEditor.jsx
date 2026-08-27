@@ -3,6 +3,7 @@ import { base44 } from "@/api/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Plus, Trash2, Save, ArrowLeft, ChevronUp, ChevronDown } from "lucide-react";
 import ImageField from "./ImageField";
+import AudioField from "./AudioField";
 import {
   Header,
   Field,
@@ -10,8 +11,8 @@ import {
   SelectField,
   ColorField,
   OptionalColorField,
+  CheckOption,
   VisibilityRow,
-
 } from "./EditorControls";
 import {
   SECTION_DEFS,
@@ -90,6 +91,11 @@ function buildForm(initial) {
       visible: s.visible !== false,
     })),
     sectionStyles: normalizeSectionStyles(i.sectionStyles),
+    music: {
+      url: i.music?.url || "",
+      autoplay: i.music?.autoplay !== false,
+      loop: i.music?.loop !== false,
+    },
     theme: {
       textColor: i.theme?.textColor || "#F2F0ED",
       paperColor: i.theme?.paperColor || "#F2F0ED",
@@ -117,6 +123,8 @@ export default function InvitationEditor({ initial, recordId, onSaved, onCancel 
       [arr[idx], arr[j]] = [arr[j], arr[idx]];
       return { ...f, sections: arr };
     });
+  const setMusic = (key, v) =>
+    setForm((f) => ({ ...f, music: { ...f.music, [key]: v } }));
   const setSectionStyle = (id, key, v) =>
     setForm((f) => ({
       ...f,
@@ -330,6 +338,7 @@ export default function InvitationEditor({ initial, recordId, onSaved, onCancel 
                       value={form.headings[id] ?? ""}
                       onChange={(v) => setHeading(id, v)}
                       placeholder={DEFAULT_HEADINGS[id]}
+                      hint={`Built-in: “${DEFAULT_HEADINGS[id]}” — type to replace it, blank keeps the built-in copy`}
                     />
                   ))}
                 </div>
@@ -397,10 +406,38 @@ export default function InvitationEditor({ initial, recordId, onSaved, onCancel 
           {tab === "media" && (
             <>
               <section>
+                <Header>Music</Header>
+                <div className="space-y-6">
+                  <AudioField
+                    label="Background track"
+                    value={form.music.url}
+                    onChange={(v) => setMusic("url", v)}
+                  />
+                  <div className="flex flex-wrap gap-8">
+                    <CheckOption
+                      label="Autoplay on first tap"
+                      checked={form.music.autoplay}
+                      onChange={(v) => setMusic("autoplay", v)}
+                    />
+                    <CheckOption
+                      label="Loop track"
+                      checked={form.music.loop}
+                      onChange={(v) => setMusic("loop", v)}
+                    />
+                  </div>
+                  <p className="text-[10px] text-[#F2F0ED]/30 max-w-md">
+                    Guests get a small round button at the bottom-left. If autoplay is on,
+                    playback starts after their first interaction anywhere on the page
+                    (a browser rule — sound can never start silently).
+                  </p>
+                </div>
+              </section>
+
+              <section>
                 <Header>Imagery</Header>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <ImageField label="Hero Image" value={form.heroImage} onChange={(v) => set("heroImage", v)} />
-                  <ImageField label="Story Image" value={form.storyImage} onChange={(v) => set("storyImage", v)} />
+                  <ImageField label="Hero backdrop (image or video)" value={form.heroImage} onChange={(v) => set("heroImage", v)} />
+                  <ImageField label="Story media (image or video)" value={form.storyImage} onChange={(v) => set("storyImage", v)} />
                 </div>
               </section>
 

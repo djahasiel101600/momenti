@@ -139,6 +139,8 @@ export default function Invitation() {
 
       {rsvpEnabled && <StickyRsvp />}
 
+      {data.music?.url && <MusicWidget music={data.music} />}
+
       <footer className="inv-bg inv-text-30 py-8 text-center text-[10px] tracking-luxe uppercase">
         momenti.co · {data.couple}
       </footer>

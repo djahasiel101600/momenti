@@ -14,6 +14,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { normalizeInvitation } from "../src/lib/templates.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = 8791;
@@ -183,6 +184,80 @@ try {
 
   const traversal = await fetch(`${BASE}/uploads/..%2Fdb.json`);
   check("traversal.blocked", [400, 404].includes(traversal.status), true);
+
+  // --- streamed media uploads -------------------------------------------------
+  const mp3Bytes = new Uint8Array([
+    0x49, 0x44, 0x33, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  ]); // minimal "ID3" header
+  const anonStream = await fetch(
+    `${BASE}/api/uploads/stream?filename=${encodeURIComponent("q.mp3")}`,
+    { method: "PUT", headers: { "Content-Type": "audio/mpeg" }, body: mp3Bytes }
+  );
+  check("stream.anonymous_status", anonStream.status, 401);
+
+  const stream = await fetch(
+    `${BASE}/api/uploads/stream?filename=${encodeURIComponent("loop.mp3")}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: authHeaders.Authorization,
+        "Content-Type": "audio/mpeg",
+      },
+      body: mp3Bytes,
+    }
+  );
+  const streamData = await stream.json().catch(() => null);
+  check("stream.audio.status", stream.status, 201);
+  check("stream.audio.url_suffix", String(streamData?.file_url || "").endsWith(".mp3"), true);
+  const servedAudio = await fetch(BASE + streamData.file_url);
+  check("stream.served_content_type", servedAudio.headers.get("content-type"), "audio/mpeg");
+
+  const badExt = await fetch(
+    `${BASE}/api/uploads/stream?filename=evil.txt`,
+    { method: "PUT", headers: { Authorization: authHeaders.Authorization }, body: "x" }
+  );
+  check("stream.badext_status", badExt.status, 415);
+
+  // --- invitation carrying music + video gallery item --------------------------
+  const mediaInvite = await jsonFetch("/api/entities/invitations", {
+    method: "POST",
+    headers: authHeaders,
+    body: {
+      slug: "media-invite",
+      couple: "M & V",
+      coupleShort: "M&V",
+      eventType: "Wedding",
+      date: "2027-02-02T10:00",
+      venueName: "", venueAddress: "", mapUrl: "",
+      time: "", dressCode: "", story: "",
+      heroImage: "/media/a2a00eea3_generated_131f7848.png",
+      storyImage: "/media/acb2ce145_generated_60229421.png",
+      gallery: [{ url: "/uploads/clip.mp4", alt: "highlight reel", span: "wide" }],
+      accentColor: "#C58A58", backgroundColor: "#101014", countdownVisible: true,
+      heroKicker: "", heroSubline: "", timeNote: "", dressCodeNote: "",
+      detailsNote: "", rsvpNote: "", rsvpMaxGuests: "5",
+      headings: {},
+      sections: [
+        { id: "countdown", label: "Countdown", visible: true },
+        { id: "story", label: "Our Story", visible: true },
+        { id: "details", label: "Details", visible: true },
+        { id: "gallery", label: "Gallery", visible: true },
+        { id: "rsvp", label: "RSVP", visible: true },
+      ],
+      sectionStyles: {},
+      music: { url: streamData.file_url, autoplay: false },
+      theme: { textColor: "#F2F0ED", paperColor: "#F2F0ED", displayFont: "serif" },
+    },
+  });
+  check("media.invite_create_status", mediaInvite.status, 201);
+
+  const fetchedMedia = (
+    await jsonFetch("/api/entities/invitations?slug=media-invite")
+  ).data;
+  const normalizedMedia = normalizeInvitation(fetchedMedia[0]);
+  check("norm.music.url", normalizedMedia.music.url, streamData.file_url);
+  check("norm.music.autoplay_off_respected", normalizedMedia.music.autoplay, false);
+  check("norm.music.loop_default_true", normalizedMedia.music.loop, true);
 
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nALL CHECKS PASSED");
   process.exitCode = failures ? 1 : 0;

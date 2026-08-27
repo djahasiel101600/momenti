@@ -246,6 +246,15 @@ export function mixHex(a, b, t) {
   );
 }
 
+// --- Media helpers ------------------------------------------------------------
+
+/** Classify a media URL by extension: "video" | "audio" | "image". */
+export function mediaTypeFromUrl(url = "") {
+  const u = String(url || "");
+  if (/\.(mp4|m4v|webm|mov)(\?.*)?(#.*)?$/i.test(u)) return "video";
+  if (/\.(mp3|m4a|aac|wav|ogg|oga|flac)(\?.*)?(#.*)?$/i.test(u)) return "audio";
+  return "image";
+}
 const SECTION_STYLE_KEYS = ["bgColor", "textColor", "accentColor"];
 
 function sanitizeSectionStyles(raw) {
@@ -346,6 +355,7 @@ export function templateDefaults(templateId) {
     headings: {},       // per-section overrides, "" = built-in copy
     sections: buildDefaultSections(),
     sectionStyles: {}, // per-section {bgColor,textColor,accentColor}, blank = inherit
+    music: { url: "", autoplay: true, loop: true },
     theme: { textColor: "#F2F0ED", paperColor: "#F2F0ED", displayFont: "serif" },
   };
 }
@@ -379,6 +389,7 @@ export function normalizeInvitation(r) {
   }
 
   const themeIn = r.theme && typeof r.theme === "object" ? r.theme : {};
+  const musicIn = r.music && typeof r.music === "object" ? r.music : {};
   const cleanText = (v) => (typeof v === "string" ? v.trim() : "");
 
   return {
@@ -410,6 +421,11 @@ export function normalizeInvitation(r) {
     rsvpMaxGuests: Math.min(Math.max(parseInt(r.rsvpMaxGuests, 10) || 5, 1), 10),
     sections,
     headings,
+    music: {
+      url: String(musicIn.url || "").trim(),
+      autoplay: musicIn.autoplay !== false,
+      loop: musicIn.loop !== false,
+    },
     sectionStyles: sanitizeSectionStyles(r.sectionStyles),
     theme: {
       textColor: isHexColor(themeIn.textColor) ? themeIn.textColor : "#F2F0ED",

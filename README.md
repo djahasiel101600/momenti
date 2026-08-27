@@ -91,8 +91,9 @@ Entities & misc:
 
 - `GET /api/entities/invitations?sort=-created_date&limit=N&<field>=value` — list/filter
 - `GET/POST /api/entities/invitations` · `PATCH|DELETE /api/entities/invitations/:id`
-- `POST /api/uploads` — `{filename,data:<data-url>}` (base64 JSON) → `{file_url:"/uploads/<name>"}`
-- `GET /uploads/<name>` — uploaded media (immutable cache headers)
+- `POST /api/uploads` — `{filename,data:<data-url>}` (base64 JSON, images & small files) → `{file_url:"/uploads/<name>"}`
+- `PUT /api/uploads/stream?filename=<enc>` — raw-body streaming upload for large audio/video (auth required; extension allowlist; per-kind size caps: images 12 MB, audio 150 MB, video 750 MB) → `{file_url}`
+- `GET /uploads/<name>` — uploaded media with correct MIME types
 - `GET /api/app/settings` — boot-time app settings probe used by the frontend
 - `GET /api/health`
 
@@ -119,9 +120,15 @@ sub-line, hosts, venue details, per-card notes, story, RSVP settings),
 **Sections** (reorder, hide/show, eyebrow labels and heading overrides for
 Story/Details/Gallery/RSVP), **Style** (accent/background/text colors,
 curated palette presets, serif-vs-sans display typeface) and **Media**
-(hero/story imagery and the gallery manager). Public pages render sections
-in the chosen order; every knob degrades gracefully for records saved before
-a given field existed — see `normalizeInvitation`.
+(music track with autoplay/loop toggles, hero & story backdrop accepting
+images *or* videos, and a gallery manager where each photo slot also takes
+video clips). Public pages render sections in the chosen order; every knob
+degrades gracefully for records saved before a given field existed — see
+`normalizeInvitation`.
+
+**Heading overrides**: each section's big display heading is yours to change;
+leave the field blank to keep the built-in copy ("How we met.", "When &
+where.", …). The field's hint shows exactly which built-in line applies.
 
 ## Migration Notes (Base44 detachment)
 

@@ -208,13 +208,37 @@ const invitationEntity = {
 // --- Integrations ---------------------------------------------------------------
 
 /**
- * Drop-in for base44.integrations.Core.UploadFile({ file }).
- * Reads the File in the browser as a data URL and posts it as JSON; the
- * server decodes it into server/data/uploads and returns the public URL.
- * Resolves to { file_url } like the original did.
+ * Drop-in for the old Core.UploadFile({ file }): images, audio and video.
+ *
+ * Small files ride the JSON/base64 endpoint (fine for images & short audio).
+ * Larger ones stream via PUT /api/uploads/stream, which pipes the raw body
+ * straight to disk server-side — a phone-shot video never inflates to base64
+ * or buffers in memory. Resolves to { file_url } either way.
  */
+const STREAM_UPLOAD_THRESHOLD_BYTES = 8 * 1024 * 1024;
+
 async function uploadFile({ file }) {
   if (!file) throw new ApiError(400, "No file provided");
+
+  if (file.size > STREAM_UPLOAD_THRESHOLD_BYTES) {
+    const token = getToken();
+    if (!token) throw new ApiError(401, "Authentication required");
+    const res = await fetch(
+      `${API_BASE}/uploads/stream?filename=${encodeURIComponent(file.name)}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": file.type || "application/octet-stream",
+        },
+        body: file,
+      }
+    );
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new ApiError(res.status, data?.error || `Upload failed (${res.status})`, data);
+    return { file_url: data.file_url || data.url, kind: data.kind };
+  }
+
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));

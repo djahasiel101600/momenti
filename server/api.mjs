@@ -39,7 +39,24 @@ const MAX_BODY_BYTES = 30 * 1024 * 1024; // headroom for base64 image payloads
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024; // decoded upload ceiling
 const DEV_HELPERS = process.env.MOMENTI_DEV_HELPERS !== "off";
 
-const ALLOWED_UPLOAD_EXT = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif"];
+const IMAGE_EXT = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif"];
+const AUDIO_EXT = [".mp3", ".m4a", ".aac", ".wav", ".ogg", ".oga", ".flac"];
+const VIDEO_EXT = [".mp4", ".m4v", ".webm", ".mov"];
+const ALLOWED_UPLOAD_EXT = [...IMAGE_EXT, ...AUDIO_EXT, ...VIDEO_EXT];
+// Kind-specific ceilings: base64 JSON uploads stay small; large audio/video
+// must go through PUT /api/uploads/stream which pipes straight to disk.
+const KIND_LIMIT_BYTES = {
+  image: 12 * 1024 * 1024,
+  audio: 150 * 1024 * 1024,
+  video: 750 * 1024 * 1024,
+};
+function uploadKindFor(filename) {
+  const ext = path.parse(String(filename || "")).ext.toLowerCase();
+  if (IMAGE_EXT.includes(ext)) return "image";
+  if (AUDIO_EXT.includes(ext)) return "audio";
+  if (VIDEO_EXT.includes(ext)) return "video";
+  return null;
+}
 const EXT_TO_MIME = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -47,6 +64,17 @@ const EXT_TO_MIME = {
   ".gif": "image/gif",
   ".webp": "image/webp",
   ".avif": "image/avif",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".oga": "audio/ogg",
+  ".flac": "audio/flac",
+  ".mp4": "video/mp4",
+  ".m4v": "video/mp4",
+  ".webm": "video/webm",
+  ".mov": "video/quicktime",
 };
 
 // --- Storage plumbing -------------------------------------------------------
@@ -305,7 +333,7 @@ async function handleRegister(req, res) {
   }
   if (findUserByEmail(email)) throw new HttpError(409, "An account with this email already exists");
   // No mailer exists locally, so verification cannot deliver an emailed code
-  // through a hosted flow — queue the credentials until the OTP is verified
+  // through a hosted flow â€” queue the credentials until the OTP is verified
   // (handleVerifyOtp), surfacing the code via DEV_HELPERS meanwhile.
   DB.pendingRegs[email] = { passwordHash: hashPassword(String(body.password)), expiresAt: Date.now() + OTP_TTL_MS };
   const otp = createOtp(email);
@@ -503,7 +531,9 @@ async function handleUpload(req, res) {
     throw new HttpError(400, "Malformed file data");
   }
   if (!buffer.length) throw new HttpError(400, "Empty file");
-  if (buffer.length > MAX_UPLOAD_BYTES) throw new HttpError(413, "Image exceeds the 12 MB limit");
+  const kind = uploadKindFor(body.filename);
+  if (kind !== "image") throw new HttpError(415, "Use the streaming upload endpoint for non-image files");
+  if (buffer.length > KIND_LIMIT_BYTES.image) throw new HttpError(413, "Image exceeds the 12 MB limit");
 
   let name;
   try {
@@ -521,6 +551,69 @@ async function handleUpload(req, res) {
   sendJson(res, 201, { file_url: `/uploads/${name}`, url: `/uploads/${name}` });
 }
 
+/**
+ * Streaming upload: PUT /api/uploads/stream?filename=<enc>
+ * Raw request body is piped straight to disk (no base64, no buffering), so
+ * videos up to hundreds of megabytes upload with constant memory usage.
+ */
+async function handleStreamUpload(req, res, url) {
+  const user = await requireUser(req);
+  const filename = String(url.searchParams.get("filename") || "");
+  const kind = uploadKindFor(filename);
+  if (!kind) {
+    throw new HttpError(415, `Unsupported file type. Allowed: ${ALLOWED_UPLOAD_EXT.join(", ")}`);
+  }
+  const name = sanitizeFileName(filename);
+  const limit = KIND_LIMIT_BYTES[kind];
+  const finalPath = path.join(UPLOADS_DIR, name);
+  const tmpPath = `${finalPath}.part`;
+  let received = 0;
+
+  await new Promise((resolve, reject) => {
+    const out = fs.createWriteStream(tmpPath);
+    let settled = false;
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      out.destroy();
+      fs.unlink(tmpPath, () => {});
+      reject(err);
+    };
+    req.on("data", (chunk) => {
+      received += chunk.length;
+      if (received > limit) {
+        req.destroy();
+        fail(new HttpError(413, `File exceeds the ${Math.round(limit / 1024 / 1024)} MB limit for ${kind}s`));
+      }
+    });
+    req.on("error", fail);
+    out.on("error", fail);
+    out.on("finish", () => {
+      if (settled) return;
+      settled = true;
+      if (received === 0) {
+        out.close();
+        fs.unlink(tmpPath, () => {});
+        reject(new HttpError(400, "Empty upload"));
+        return;
+      }
+      try {
+        // Promote the fully-written temp file atomically so partial uploads
+        // never become visible under their public name.
+        fs.renameSync(tmpPath, finalPath);
+      } catch (err) {
+        fs.unlink(tmpPath, () => {});
+        reject(err);
+        return;
+      }
+      resolve();
+    });
+    req.pipe(out);
+  });
+
+  void user;
+  sendJson(res, 201, { file_url: `/uploads/${name}`, url: `/uploads/${name}`, kind, bytes: received });
+}
 function serveUploads(res, pathname) {
   const rel = decodeURIComponent(pathname.replace(/^\/uploads\//, ""));
   const root = path.resolve(UPLOADS_DIR);
@@ -601,6 +694,9 @@ async function dispatch(req, res, url) {
   }
 
   if (p === "/api/uploads" && method === "POST") return handleUpload(req, res);
+  if (p === "/api/uploads/stream" && method === "PUT") {
+    return handleStreamUpload(req, res, url);
+  }
 
   throw new HttpError(404, `No route for ${method} ${p}`);
 }
