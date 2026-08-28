@@ -27,7 +27,7 @@ services:
       MOMENTI_ALLOWED_HOSTS: "momenti,localhost,127.0.0.1"
       # Origin used in password-reset links; Referer fallback covers this in
       # practice, but pin it to your tunnel domain for correctness:
-      MOMENTI_PUBLIC_ORIGIN: "https://invites.example.com"
+      MOMENTI_PUBLIC_ORIGIN: "https://momenti.jdp-homelab.space"
       GUNICORN_WORKERS: "2"
       GUNICORN_THREADS: "8"
     volumes:
