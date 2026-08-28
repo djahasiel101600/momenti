@@ -1,6 +1,7 @@
 #env
 .env
 .env.*
+!.env.example
 
 # Local backend data (users, invitations, sessions, uploads)
 server/data/

@@ -17,10 +17,10 @@ services:
     networks:
       - jdp-network
     environment:
-      MOMENTI_DEBUG: "off"                 # hardening: no debug pages in prod
-      MOMENTI_DATA_DIR: /data              # volume-mounted below
-      MOMENTI_DIST_DIR: /app/dist          # Django serves the built SPA
-      MOMENTI_DEV_HELPERS: "off"           # never surface OTP/reset helpers in prod
+      MOMENTI_DEBUG: "${MOMENTI_DEBUG:-off}"                 # keep "off" in prod
+      MOMENTI_DATA_DIR: /data                                # volume-mounted below
+      MOMENTI_DIST_DIR: /app/dist                            # Django serves the built SPA
+      MOMENTI_DEV_HELPERS: "${MOMENTI_DEV_HELPERS:-off}"     # keep "off" in prod
       # cloudflared forwards the original public hostname as the Host header —
       # it MUST be in ALLOWED_HOSTS or Django answers every request with 400
       # (DisallowedHost). Override via .env / shell env without editing here:
@@ -28,8 +28,12 @@ services:
       # Origin used in password-reset links and CSRF checks for the admin:
       MOMENTI_PUBLIC_ORIGIN: "${MOMENTI_PUBLIC_ORIGIN:-https://momenti.jdp-homelab.space}"
       MOMENTI_CSRF_TRUSTED_ORIGINS: "${MOMENTI_CSRF_TRUSTED_ORIGINS:-https://momenti.jdp-homelab.space}"
-      GUNICORN_WORKERS: "2"
-      GUNICORN_THREADS: "8"
+      # Empty => the app generates a signing key on first boot and persists it
+      # in /data. Pin via .env for multi-replica setups:
+      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-}"
+      GUNICORN_WORKERS: "${GUNICORN_WORKERS:-2}"
+      GUNICORN_THREADS: "${GUNICORN_THREADS:-8}"
+      GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-120}"
     volumes:
       - ./server/data:/data
     # The tunnel is the only ingress — no host ports. Uncomment to poke at it

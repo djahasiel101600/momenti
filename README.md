@@ -101,6 +101,11 @@ ingress:
 
 Notes:
 
+- **Environment**: copy `.env.example` to `.env` (same directory as
+  `docker-compose.yml`) and tune it — compose auto-loads `.env`; every value
+  has a working default, so an empty copy is fine. `.env` is gitignored; the
+  template is committed.
+
 - **Data** lives in `./server/data` on the host (SQLite DB, uploaded media,
   token-signing secret) — gitignored, survives rebuilds, and shared with the
   legacy Node backend, so importing old data needs no copying:

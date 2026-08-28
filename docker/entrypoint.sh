@@ -24,6 +24,10 @@ fi
 
 cd /app/backend
 
+if [ -n "$MOMENTI_DIST_DIR" ] && [ ! -f "$MOMENTI_DIST_DIR/index.html" ]; then
+  echo "[momenti] WARNING: MOMENTI_DIST_DIR=$MOMENTI_DIST_DIR has no index.html — the SPA will return 503"
+fi
+
 python manage.py migrate --noinput
 
 exec gunicorn momenti.wsgi:application \

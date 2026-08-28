@@ -47,6 +47,10 @@ RUN apt-get update \
 
 COPY backend ./
 
+# Built SPA from stage 1 — Django hosts it (MOMENTI_DIST_DIR=/app/dist).
+# Missing this made every page 503 with "dist/ not found".
+COPY --from=web /app/dist /app/dist
+
 # Admin static assets are baked into the image; runtime state (SQLite DB,
 # uploaded media, the token-signing secret) lives in /data — mount a volume.
 RUN DJANGO_SECRET_KEY=build-only python manage.py collectstatic --noinput \
