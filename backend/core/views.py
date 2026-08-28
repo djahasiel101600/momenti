@@ -23,6 +23,7 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
+from django.core.mail import send_mail
 from django.http import FileResponse, Http404, HttpResponse
 from django.utils import timezone
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -81,9 +82,68 @@ def create_otp(email):
         email=email,
         defaults={"code_hash": sha256_hex(otp), "expires_at": now() + settings.MOMENTI_OTP_TTL},
     )
+    return otp
+
+
+def deliver_otp(email, otp):
+    """Deliver the verification code: by email when SMTP is configured,
+    otherwise as a dev helper (console + response). Returns the response
+    payload for register/resend-otp."""
+    resp = {"otp_sent": True}
+    if settings.MOMENTI_EMAIL_HOST:
+        try:
+            send_mail(
+                subject="Your momenti verification code",
+                message=(
+                    f"Your momenti verification code is:\n\n    {otp}\n\n"
+                    "It expires in 10 minutes. If you didn't request it, ignore this email."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+            log.info("Verification code emailed to %s", email)
+            return resp
+        except Exception as exc:
+            log.error("Could not email the verification code to %s: %s", email, exc)
+            if not settings.MOMENTI_DEV_HELPERS:
+                raise MomentiError(
+                    "Could not send the verification email. Please try again later.", 500
+                )
+            # fall through to the dev helper so local testing isn't blocked
     if settings.MOMENTI_DEV_HELPERS:
         log.info("Verification code for %s: %s", email, otp)
-    return otp
+        resp["dev_otp"] = otp
+    return resp
+
+
+def deliver_reset_link(email, link):
+    """Deliver the reset link by email when SMTP is configured; otherwise
+    surface it as a dev helper. Returns the response payload."""
+    resp = {}
+    if settings.MOMENTI_EMAIL_HOST:
+        try:
+            send_mail(
+                subject="Reset your momenti password",
+                message=(
+                    "Someone requested a password reset for your momenti account.\n\n"
+                    f"Open this link to choose a new password (valid for 1 hour):\n\n{link}\n\n"
+                    "If you didn't request this, you can ignore this email."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+            log.info("Password reset link emailed to %s", email)
+            return resp
+        except Exception as exc:
+            log.error("Could not email the reset link to %s: %s", email, exc)
+            if not settings.MOMENTI_DEV_HELPERS:
+                raise MomentiError("Could not send the reset email. Please try again later.", 500)
+    if settings.MOMENTI_DEV_HELPERS:
+        log.info("Password reset link for %s: %s", email, link)
+        resp["dev_reset_link"] = link
+    return resp
 
 
 def consume_otp(email, otp):
@@ -158,10 +218,7 @@ class RegisterView(APIView):
             },
         )
         otp = create_otp(email)
-        resp = {"otp_sent": True}
-        if settings.MOMENTI_DEV_HELPERS:
-            resp["dev_otp"] = otp
-        return Response(resp, status=201)
+        return Response(deliver_otp(email, otp), status=201)
 
 
 class VerifyOtpView(APIView):
@@ -205,10 +262,7 @@ class ResendOtpView(APIView):
     def post(self, request):
         email = require_email(body_dict(request))
         otp = create_otp(email)
-        resp = {"otp_sent": True}
-        if settings.MOMENTI_DEV_HELPERS:
-            resp["dev_otp"] = otp
-        return Response(resp)
+        return Response(deliver_otp(email, otp))
 
 
 class LoginView(APIView):
@@ -268,9 +322,7 @@ class ResetPasswordRequestView(APIView):
                         origin = ""
                 origin = origin or "http://localhost:5173"
             link = f"{origin}/reset-password?token={token}"
-            if settings.MOMENTI_DEV_HELPERS:
-                log.info("Password reset link for %s: %s", email, link)
-                resp["dev_reset_link"] = link
+            resp.update(deliver_reset_link(email, link))
         return Response(resp)
 
 

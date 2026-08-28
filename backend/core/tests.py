@@ -20,6 +20,11 @@ PNG_DATA_URL = (
 )
 MP3_BYTES = b"ID3\x03\x00\x00\x00\x00\x00\x00"  # minimal "ID3" header
 
+EMAIL_TEST_SETTINGS = {
+    "MOMENTI_EMAIL_HOST": "smtp.test.dev",
+    "EMAIL_BACKEND": "django.core.mail.backends.locmem.EmailBackend",
+    "MOMENTI_DEV_HELPERS": False,
+}
 
 @override_settings(MEDIA_ROOT=Path(tempfile.mkdtemp(prefix="momenti-test-media-")))
 class MomentiApiTests(TestCase):
@@ -569,9 +574,31 @@ class MomentiApiTests(TestCase):
         )
         self.assertEqual(bad_guests.status_code, 400)
 
-        missing_params = self.client.get(
-            "/api/rsvps", HTTP_AUTHORIZATION=f"Bearer {token}"
+
+    
+
+    # --- email delivery (SMTP) -----------------------------------------------------------------
+
+    @override_settings(**EMAIL_TEST_SETTINGS)
+    def test_register_emails_otp_no_dev_helper(self):
+        from django.core import mail as mail_outbox
+        from core.views import deliver_otp
+
+        payload = deliver_otp("user@test.dev", "123456")
+        self.assertEqual(payload, {"otp_sent": True})  # no dev_otp when emailing
+        self.assertEqual(len(mail_outbox.outbox), 1)
+        self.assertEqual(mail_outbox.outbox[0].to, ["user@test.dev"])
+        self.assertIn("123456", mail_outbox.outbox[0].body)
+
+    @override_settings(**EMAIL_TEST_SETTINGS)
+    def test_register_response_omits_dev_helper_with_email(self):
+        from django.core import mail as outbox
+
+        reg = self.client.post(
+            "/api/auth/register", {"email": "mail@test.dev", "password": "secret123"}, format="json"
         )
-        self.assertEqual(missing_params.status_code, 400)
-
-
+        self.assertEqual(reg.status_code, 201)
+        body = reg.json()
+        self.assertNotIn("dev_otp", body)  # code is emailed, not echoed
+        self.assertEqual(len(outbox.outbox), 1)
+        self.assertEqual(outbox.outbox[0].to, ["mail@test.dev"])

@@ -166,6 +166,24 @@ MOMENTI_KIND_LIMIT_BYTES = {
     "video": 750 * 1024 * 1024,
 }
 
+# --- Email (SMTP) --------------------------------------------------------------
+# When MOMENTI_EMAIL_HOST is set, verification codes and password-reset links
+# are sent by email and the dev helpers (dev_otp / dev_reset_link) disappear
+# from API responses. Without it, the dev helpers remain the delivery channel.
+MOMENTI_EMAIL_HOST = os.environ.get("MOMENTI_EMAIL_HOST", "").strip()
+if MOMENTI_EMAIL_HOST:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = MOMENTI_EMAIL_HOST
+    EMAIL_PORT = int(os.environ.get("MOMENTI_EMAIL_PORT", "587"))
+    EMAIL_HOST_USER = os.environ.get("MOMENTI_EMAIL_USER", "").strip()
+    EMAIL_HOST_PASSWORD = os.environ.get("MOMENTI_EMAIL_PASSWORD", "")
+    EMAIL_USE_TLS = os.environ.get("MOMENTI_EMAIL_USE_TLS", "true").strip().lower() not in {"off", "false", "0", "no"}
+    EMAIL_USE_SSL = os.environ.get("MOMENTI_EMAIL_USE_SSL", "").strip().lower() in {"on", "true", "1", "yes"}
+    EMAIL_TIMEOUT = 15
+    DEFAULT_FROM_EMAIL = os.environ.get("MOMENTI_EMAIL_FROM", "").strip() or f"momenti <no-reply@{MOMENTI_EMAIL_HOST}>"
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
 # --- i18n / tz / static / media ------------------------------------------------
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

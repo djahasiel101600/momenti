@@ -144,6 +144,7 @@ All optional:
 - `MOMENTI_DEBUG` — set `off` in production (default on for development)
 - `MOMENTI_ALLOWED_HOSTS` — comma-separated hosts (default localhost + testserver)
 - `MOMENTI_CSRF_TRUSTED_ORIGINS` — comma-separated origins trusted for admin/CSRF behind a proxy
+- `MOMENTI_EMAIL_HOST` / `MOMENTI_EMAIL_PORT` / `MOMENTI_EMAIL_USER` / `MOMENTI_EMAIL_PASSWORD` / `MOMENTI_EMAIL_FROM` — enable real SMTP email for verification codes & password-reset links; when unset the dev helpers remain the delivery path
 - `MOMENTI_DIST_DIR` — have Django host the built frontend (SPA fallback)
 - `MOMENTI_PUBLIC_ORIGIN` — origin used in generated password-reset links
 - `MOMENTI_DEV_HELPERS` — set `off` to stop surfacing OTP codes / reset links

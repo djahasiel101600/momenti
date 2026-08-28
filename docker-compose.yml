@@ -31,9 +31,20 @@ services:
       # Empty => the app generates a signing key on first boot and persists it
       # in /data. Pin via .env for multi-replica setups:
       DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-}"
+      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-}"
       GUNICORN_WORKERS: "${GUNICORN_WORKERS:-2}"
       GUNICORN_THREADS: "${GUNICORN_THREADS:-8}"
       GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-120}"
+      # Optional email delivery for verification codes / reset links. When
+      # MOMENTI_EMAIL_HOST is set, mail goes out over SMTP and the dev
+      # helpers disappear; leave unset to keep dev helpers:
+      MOMENTI_EMAIL_HOST: "${MOMENTI_EMAIL_HOST:-}"
+      MOMENTI_EMAIL_PORT: "${MOMENTI_EMAIL_PORT:-587}"
+      MOMENTI_EMAIL_USER: "${MOMENTI_EMAIL_USER:-}"
+      MOMENTI_EMAIL_PASSWORD: "${MOMENTI_EMAIL_PASSWORD:-}"
+      MOMENTI_EMAIL_FROM: "${MOMENTI_EMAIL_FROM:-}"
+      MOMENTI_EMAIL_USE_TLS: "${MOMENTI_EMAIL_USE_TLS:-true}"
+      MOMENTI_EMAIL_USE_SSL: "${MOMENTI_EMAIL_USE_SSL:-false}"
     volumes:
       - ./server/data:/data
     # The tunnel is the only ingress — no host ports. Uncomment to poke at it
