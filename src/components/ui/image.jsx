@@ -151,6 +151,12 @@ const Image = React.forwardRef(
       onError: handleError,
     }
 
+    // Plain-<img> fallbacks (local /uploads & /media files, transform error
+    // states) must honor the caller's fitting type too: without an explicit
+    // object-fit, the CSS default `fill` stretches the photo inside any box
+    // whose ratio differs — hero backdrop on phones, lightbox wide shots…
+    const fitClass = fittingType === "fit" ? "object-contain" : "object-cover"
+
     if (!src) {
       // Renders as a real <img> (not a <div>) — the visual editor's
       // click-to-edit toolbar keys its "Replace Image" action off the DOM
@@ -167,7 +173,13 @@ const Image = React.forwardRef(
       const isErrorMode = mode === IMAGE_LOAD_MODE.FALLBACK
       const imageSrc = isErrorMode ? FALLBACK_IMAGE_URL : getOriginalImageUrl(src, parsedSource)
       return (
-        <img ref={ref} src={imageSrc} {...imageProps} data-error-image={isErrorMode || undefined} />
+        <img
+          ref={ref}
+          src={imageSrc}
+          {...imageProps}
+          className={cn(imageProps.className, fitClass)}
+          data-error-image={isErrorMode || undefined}
+        />
       )
     }
 

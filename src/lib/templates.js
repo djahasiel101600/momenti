@@ -339,6 +339,7 @@ export function templateDefaults(templateId) {
     dressCode: c.dressCode,
     story: c.story,
     heroImage: c.heroImage,
+    heroImageMobile: "",
     storyImage: c.storyImage,
     gallery: c.gallery.map((g) => ({ ...g })),
     accentColor: t.accentColor,
@@ -407,6 +408,9 @@ export function normalizeInvitation(r) {
     dressCode: r.dressCode,
     story: r.story,
     heroImage: r.heroImage,
+    // Optional art direction: a dedicated (usually portrait) hero image for
+    // small screens. Empty falls back to the main heroImage.
+    heroImageMobile: typeof r.heroImageMobile === "string" ? r.heroImageMobile : "",
     storyImage: r.storyImage,
     gallery: Array.isArray(r.gallery) ? r.gallery : [],
     accentColor: isHexColor(r.accentColor) ? r.accentColor : "#C58A58",

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { base44 } from "@/api/client";
 import { useToast } from "@/components/ui/use-toast";
-import { Plus, Trash2, Save, ArrowLeft, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Save, ArrowLeft, ChevronUp, ChevronDown, Crop } from "lucide-react";
 import ImageField from "./ImageField";
 import AudioField from "./AudioField";
 import {
@@ -73,6 +73,7 @@ function buildForm(initial) {
     dressCode: i.dressCode || "",
     story: i.story || "",
     heroImage: i.heroImage || "",
+    heroImageMobile: i.heroImageMobile || "",
     storyImage: i.storyImage || "",
     gallery: Array.isArray(i.gallery) ? i.gallery.map((g) => ({ ...g })) : [],
     accentColor: i.accentColor || "#C58A58",
@@ -436,14 +437,52 @@ export default function InvitationEditor({ initial, recordId, onSaved, onCancel 
               <section>
                 <Header>Imagery</Header>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <ImageField label="Hero backdrop (image or video)" value={form.heroImage} onChange={(v) => set("heroImage", v)} />
+                  <div className="space-y-6">
+                    <ImageField
+                      label="Hero backdrop (image or video)"
+                      value={form.heroImage}
+                      onChange={(v) => set("heroImage", v)}
+                    />
+                    <ImageField
+                      label="Hero backdrop — mobile (optional)"
+                      value={form.heroImageMobile}
+                      onChange={(v) => set("heroImageMobile", v)}
+                    />
+                  </div>
                   <ImageField label="Story media (image or video)" value={form.storyImage} onChange={(v) => set("storyImage", v)} />
                 </div>
+                <p className="mt-4 text-[10px] leading-relaxed text-[#F2F0ED]/30 max-w-xl">
+                  Preferred sizes — <span className="text-[#F2F0ED]/60">Hero backdrop:</span> ≥ 1920 × 1080 px landscape (it fills the
+                  whole first screen on desktop).{" "}
+                  <span className="text-[#F2F0ED]/60">Hero mobile:</span> portrait ≈ 1080 × 1920 px — shown on phones (below 768px);
+                  leave empty to reuse the main backdrop.{" "}
+                  <span className="text-[#F2F0ED]/60">Story media:</span> 1200 × 1600 px portrait (3:4 frame). Videos are welcome in
+                  every slot (muted, looping) — 1080p keeps them crisp, 750 MB max.
+                </p>
               </section>
 
               <section>
                 <Header>Gallery</Header>
-                <div className="space-y-4">
+                <div className="flex items-start gap-3 p-4 border border-white/10 rounded-sm bg-white/[0.02]">
+                  <Crop size={16} className="text-[#C58A58] mt-0.5 flex-shrink-0" />
+                  <div className="space-y-2 text-[10px] leading-relaxed text-[#F2F0ED]/40">
+                    <p className="text-[10px] tracking-luxe uppercase text-[#F2F0ED]/60">Photo size guide</p>
+                    <p>
+                      <span className="text-[#C58A58]">Tall</span> — portrait, ratio ≈ 1:2. Recommended:{" "}
+                      <span className="text-[#F2F0ED]/70">800 × 1600 px</span>
+                    </p>
+                    <p>
+                      <span className="text-[#C58A58]">Wide</span> — landscape, ratio ≈ 2:1. Recommended:{" "}
+                      <span className="text-[#F2F0ED]/70">1600 × 720 px</span>
+                    </p>
+                    <p>
+                      Every gallery cell crops to fill its frame, so matching the shape matters more than hitting the exact pixels —
+                      anything larger is safe, smaller images get upscaled and look soft. Upload caps: images 12 MB · videos 750 MB ·
+                      audio 150 MB.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-4">
                   {form.gallery.map((g, i) => (
                     <div key={i} className="flex flex-col md:flex-row gap-4 p-4 border border-white/10 rounded-sm">
                       <div className="md:w-40 flex-shrink-0">
@@ -461,6 +500,9 @@ export default function InvitationEditor({ initial, recordId, onSaved, onCancel 
                             <option value="wide" className="bg-[#141414]">Wide</option>
                             <option value="tall" className="bg-[#141414]">Tall</option>
                           </select>
+                          <span className="mt-1.5 block text-[9px] text-[#F2F0ED]/30">
+                            Tall ≈ 1:2 portrait · Wide ≈ 2:1 landscape
+                          </span>
                         </label>
                       </div>
                       <button

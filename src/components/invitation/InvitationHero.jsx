@@ -1,8 +1,32 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import MediaBlock from "@/components/invitation/MediaBlock";
 
+// Tailwind's `md` breakpoint: hero art direction switches below 768px, in
+// sync with the utility classes used across the invitation.
+const MOBILE_QUERY = "(max-width: 767px)";
+
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia(MOBILE_QUERY).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const onChange = (e) => setIsMobile(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return isMobile;
+}
+
 export default function InvitationHero({ data }) {
+  const isMobile = useIsMobileViewport();
+  // Art direction: a dedicated (usually portrait) image for phones when the
+  // host supplied one; each size falls back to the other so the hero is
+  // never blank. Only the active layer renders — no hidden-image downloads.
+  const heroSrc = isMobile
+    ? data.heroImageMobile || data.heroImage
+    : data.heroImage || data.heroImageMobile;
   const ref = useRef(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const scale = useTransform(scrollYProgress, [0, 1], [1, 1.12]);
@@ -29,7 +53,7 @@ export default function InvitationHero({ data }) {
     <section ref={ref} className="relative h-screen min-h-[640px] overflow-hidden inv-bg">
       <motion.div style={{ scale, y }} className="absolute inset-0">
         <MediaBlock
-          src={data.heroImage}
+          src={heroSrc}
           alt={`Scene backdrop for ${data.couple || "the celebration"}`}
           className="w-full h-full"
         />

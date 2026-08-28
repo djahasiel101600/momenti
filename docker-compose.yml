@@ -1,0 +1,48 @@
+# momenti — API + uploaded media + built SPA in one container.
+#
+# Served exclusively through the existing cloudflared tunnel on jdp-network:
+# point the tunnel ingress at   http://momenti:8000
+# (service name = DNS name on the shared docker network).
+#
+# Runtime state (SQLite DB, uploaded media, token-signing secret) lives in
+# ./server/data on the host — gitignored, survives rebuilds, and is the same
+# directory the legacy Node backend used, so `import_momenti_json` finds
+# db.json without any copying.
+services:
+  momenti:
+    build: .
+    image: momenti:latest
+    container_name: momenti
+    restart: unless-stopped
+    networks:
+      - jdp-network
+    environment:
+      MOMENTI_DEBUG: "off"                 # hardening: no debug pages in prod
+      MOMENTI_DATA_DIR: /data              # volume-mounted below
+      MOMENTI_DIST_DIR: /app/dist          # Django serves the built SPA
+      MOMENTI_DEV_HELPERS: "off"           # never surface OTP/reset helpers in prod
+      # Host header reaching Django: by default cloudflared rewrites it to the
+      # origin name ("momenti"), so allow that; add your tunnel hostname too
+      # (or set ingress httpHostHeader to the public domain and list it here).
+      MOMENTI_ALLOWED_HOSTS: "momenti,localhost,127.0.0.1"
+      # Origin used in password-reset links; Referer fallback covers this in
+      # practice, but pin it to your tunnel domain for correctness:
+      MOMENTI_PUBLIC_ORIGIN: "https://invites.example.com"
+      GUNICORN_WORKERS: "2"
+      GUNICORN_THREADS: "8"
+    volumes:
+      - ./server/data:/data
+    # The tunnel is the only ingress — no host ports. Uncomment to poke at it
+    # from the host machine while testing:
+    # ports:
+    #   - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+networks:
+  jdp-network:
+    external: true

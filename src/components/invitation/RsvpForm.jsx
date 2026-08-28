@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { emphasizedHeading } from "@/lib/templates";
+import { base44 } from "@/api/client";
 
 const DEFAULT_RSVP_HEADING = "Will you join us?";
 
 export default function RsvpForm({ data, eyebrow = "The Guest Ledger", heading, appearance }) {
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -22,9 +25,25 @@ export default function RsvpForm({ data, eyebrow = "The Guest Ledger", heading, 
 
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitted(true);
+    if (submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await base44.entities.Rsvp.submit({
+        slug: data.slug,
+        name: form.name.trim(),
+        email: form.email.trim(),
+        attending: form.attendance === "accepts",
+        guest_count: parseInt(form.guests, 10) || 1,
+      });
+      setSubmitted(true);
+    } catch (err) {
+      setError(err?.message || "Could not send your response. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -128,13 +147,18 @@ export default function RsvpForm({ data, eyebrow = "The Guest Ledger", heading, 
                   </select>
                 </Field>
 
+                {error && (
+                  <p className="text-xs text-red-300/90 text-center">{error}</p>
+                )}
+
                 <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={{ scale: submitting ? 1 : 1.02 }}
+                  whileTap={{ scale: submitting ? 1 : 0.98 }}
                   type="submit"
-                  className="w-full mt-4 inv-accent-bg inv-ink py-4 text-xs tracking-luxe-sm uppercase inv-accent-hover transition-colors"
+                  disabled={submitting}
+                  className="w-full mt-4 inv-accent-bg inv-ink py-4 text-xs tracking-luxe-sm uppercase inv-accent-hover transition-colors disabled:opacity-60"
                 >
-                  Send Response
+                  {submitting ? "Sending…" : "Send Response"}
                 </motion.button>
               </form>
             </motion.div>

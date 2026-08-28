@@ -205,22 +205,47 @@ const invitationEntity = {
   },
 };
 
+/**
+ * Guest RSVPs. submit() is public — guests reply without accounts; the
+ * server upserts per (invitation, email), so a guest re-submitting updates
+ * their response (200 {updated:true}) instead of duplicating. list() needs
+ * the host's bearer token (the RSVP dashboard).
+ */
+const rsvpEntity = {
+  async submit(payload) {
+    return request("/rsvps", { method: "POST", body: payload });
+  },
+
+  /** list({ invitation: id } | { slug }) -> responses, newest first */
+  async list(query) {
+    const qs = toQuery(query || {});
+    return request(`/rsvps${qs ? `?${qs}` : ""}`, { auth: true });
+  },
+};
+
 // --- Integrations ---------------------------------------------------------------
 
 /**
  * Drop-in for the old Core.UploadFile({ file }): images, audio and video.
  *
- * Small files ride the JSON/base64 endpoint (fine for images & short audio).
- * Larger ones stream via PUT /api/uploads/stream, which pipes the raw body
- * straight to disk server-side — a phone-shot video never inflates to base64
- * or buffers in memory. Resolves to { file_url } either way.
+ * Routing mirrors the backend contract: POST /api/uploads accepts images
+ * only (base64 JSON, 12 MB decoded ceiling), so audio/video always stream
+ * via PUT /api/uploads/stream — which pipes the raw body straight to disk
+ * with per-kind caps (image 12 MB / audio 150 MB / video 750 MB). Images
+ * over the size threshold stream too, so a phone-shot video never inflates
+ * to base64 or buffers in memory. Resolves to { file_url } either way.
  */
 const STREAM_UPLOAD_THRESHOLD_BYTES = 8 * 1024 * 1024;
+// Extensions the backend's allowlist treats as audio/video (kind != image).
+const MEDIA_STREAM_EXT = /\.(mp3|m4a|aac|wav|ogg|oga|flac|mp4|m4v|webm|mov)$/i;
 
 async function uploadFile({ file }) {
   if (!file) throw new ApiError(400, "No file provided");
 
-  if (file.size > STREAM_UPLOAD_THRESHOLD_BYTES) {
+  const name = String(file.name || "");
+  const isMedia =
+    MEDIA_STREAM_EXT.test(name) || /^(audio|video)\//i.test(String(file.type || ""));
+  if (isMedia || file.size > STREAM_UPLOAD_THRESHOLD_BYTES) {
     const token = getToken();
     if (!token) throw new ApiError(401, "Authentication required");
     const res = await fetch(
@@ -273,6 +298,7 @@ export const api = {
   },
   entities: {
     Invitation: invitationEntity,
+    Rsvp: rsvpEntity,
   },
   integrations: {
     Core: {

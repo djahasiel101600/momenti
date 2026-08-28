@@ -4,63 +4,78 @@ import { Volume2, VolumeX } from "lucide-react";
 
 /**
  * Floating music control. Browsers refuse audible autoplay before any user
- * interaction, so when music.autoplay is on we attach a one-time pointerdown
- * listener that starts playback with the first tap anywhere — the standard
- * digital-invitation pattern.
+ * interaction, so when music.autoplay is on we try to start immediately
+ * (works where the browser allows it) and otherwise start with the first
+ * pointerdown anywhere. A gesture that lands on this button is ignored by
+ * the global listener — the button manages playback itself, so a single
+ * click can never both start and pause the track. The icon follows the
+ * element's real play/pause events rather than call-site bookkeeping.
  */
 export default function MusicWidget({ music }) {
   const audioRef = useRef(null);
+  const buttonRef = useRef(null);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState(false);
 
-  const toggle = async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    try {
-      if (audio.paused) {
-        await audio.play();
-        setPlaying(true);
-      } else {
-        audio.pause();
-        setPlaying(false);
-      }
-    } catch {
-      setError(true);
-    }
-  };
+  const url = String(music?.url || "");
+  const wantsAutoplay = music?.autoplay !== false;
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !music.url) return undefined;
+    if (!audio || !url) return undefined;
 
-    let cleanupPointer = () => {};
-    if (music.autoplay && audio.paused) {
-      const startOnFirstTouch = () => {
-        audio
-          .play()
-          .then(() => setPlaying(true))
-          .catch(() => setError(true));
-      };
-      window.addEventListener("pointerdown", startOnFirstTouch, { once: true });
-      cleanupPointer = () => window.removeEventListener("pointerdown", startOnFirstTouch);
-    }
+    setPlaying(false);
+    setError(false);
 
-    const onEndedLikeEvents = () => {}; // loop keeps it alive; placeholder for symmetry
-    void onEndedLikeEvents;
+    const tryPlay = () => {
+      audio.play().catch(() => {
+        /* blocked until a user gesture — the first-gesture listener handles it */
+      });
+    };
+    if (wantsAutoplay) tryPlay();
+
+    const onFirstGesture = (e) => {
+      if (
+        buttonRef.current &&
+        e.target instanceof Node &&
+        buttonRef.current.contains(e.target)
+      ) {
+        return; // the button's own click handler starts/stops playback
+      }
+      tryPlay();
+    };
+    window.addEventListener("pointerdown", onFirstGesture, { once: true });
 
     return () => {
-      cleanupPointer();
+      window.removeEventListener("pointerdown", onFirstGesture);
       audio.pause();
-      setPlaying(false);
     };
-  }, [music.url, music.autoplay]);
+  }, [url, wantsAutoplay]);
 
-  if (!music?.url || error) return null;
+  const toggle = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.paused) {
+      audio.play().catch(() => setError(true));
+    } else {
+      audio.pause();
+    }
+  };
+
+  if (!url || error) return null;
 
   return (
     <>
-      <audio ref={audioRef} src={music.url} loop={music.loop} preload="none" />
+      <audio
+        ref={audioRef}
+        src={url}
+        loop={music?.loop !== false}
+        preload="none"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+      />
       <motion.button
+        ref={buttonRef}
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
@@ -73,3 +88,4 @@ export default function MusicWidget({ music }) {
     </>
   );
 }
+

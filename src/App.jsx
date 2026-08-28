@@ -12,6 +12,7 @@ import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
+import RsvpDashboard from '@/pages/RsvpDashboard';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Navigate } from 'react-router-dom';
 // Add page imports here
@@ -63,6 +64,7 @@ const AuthenticatedApp = () => {
       <Route path="/" element={<Home />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route path="/studio" element={<Studio />} />
+        <Route path="/studio/rsvps/:id" element={<RsvpDashboard />} />
       </Route>
       <Route path="/:client" element={<Invitation />} />
       <Route path="*" element={<PageNotFound />} />

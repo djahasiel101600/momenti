@@ -93,13 +93,14 @@ function loadSecret() {
   return secret;
 }
 
-let DB = { users: [], invitations: [], pendingOtps: {}, pendingRegs: {}, pendingResets: {} };
+let DB = { users: [], invitations: [], rsvps: [], pendingOtps: {}, pendingRegs: {}, pendingResets: {} };
 function loadDb() {
   try {
     const parsed = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
     DB = {
       users: Array.isArray(parsed.users) ? parsed.users : [],
       invitations: Array.isArray(parsed.invitations) ? parsed.invitations : [],
+      rsvps: Array.isArray(parsed.rsvps) ? parsed.rsvps : [],
       pendingOtps: parsed.pendingOtps || {},
       pendingRegs: parsed.pendingRegs || {},
       pendingResets: parsed.pendingResets || {},
@@ -636,6 +637,120 @@ function serveUploads(res, pathname) {
   });
   fs.createReadStream(target).pipe(res);
 }
+
+// --- RSVPs ---------------------------------------------------------------------
+// Guests reply publicly (no account); re-submitting with the same email for
+// the same invitation UPDATES their response. Hosts read the guest ledger
+// with a bearer token. Wire-compatible with backend/core/views.py (Django).
+
+const RSVP_TRUE = new Set([true, "true", "yes", "accepts", "accept", 1, "1"]);
+const RSVP_FALSE = new Set([false, "false", "no", "declines", "decline", 0, "0"]);
+
+function parseAttending(value) {
+  if (typeof value === "string") value = value.trim().toLowerCase();
+  if (RSVP_TRUE.has(value)) return true;
+  if (RSVP_FALSE.has(value)) return false;
+  return null;
+}
+
+function rsvpRecord(invitation, entry) {
+  return {
+    id: entry.id,
+    invitation_id: invitation.id,
+    slug: invitation.slug || "",
+    name: entry.name,
+    email: entry.email,
+    attending: entry.attending,
+    guest_count: entry.guest_count,
+    message: entry.message || "",
+    created_date: entry.created_date,
+  };
+}
+
+function rsvpInvitationFromParams(params) {
+  const slug = String(params.get("slug") || "").trim();
+  const invitationParam = String(params.get("invitation") || "").trim();
+  if (!slug && !invitationParam) throw new HttpError(400, "Pass ?invitation=<id> or ?slug=<slug>");
+  const invitation = slug
+    ? DB.invitations.find((rec) => rec.slug === slug)
+    : DB.invitations.find((rec) => rec.id === invitationParam);
+  if (!invitation) throw new HttpError(404, "Invitation not found");
+  return invitation;
+}
+
+async function handleRsvpCreate(req, res) {
+  const body = await readJsonBody(req);
+  const slug = String(body.slug || "").trim();
+  const invitationParam = String(body.invitation || body.invitation_id || "").trim();
+  let invitation;
+  if (slug) {
+    invitation = DB.invitations.find((rec) => rec.slug === slug);
+    if (!invitation) throw new HttpError(404, "Invitation not found");
+  } else if (invitationParam) {
+    invitation = DB.invitations.find((rec) => rec.id === invitationParam);
+    if (!invitation) throw new HttpError(404, "Invitation not found");
+  } else {
+    throw new HttpError(400, "An invitation slug is required");
+  }
+
+  const name = String(body.name || "").trim().slice(0, 255);
+  if (!name) throw new HttpError(400, "Your name is required");
+
+  const email = String(body.email || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new HttpError(400, "A valid email address is required");
+  }
+
+  const attending = parseAttending(body.attending);
+  if (attending === null) {
+    throw new HttpError(400, "Let us know whether you can make it (accepts/declines)");
+  }
+
+  const rawGuests = body.guest_count ?? body.guests ?? 1;
+  const guestCount = Number(rawGuests);
+  if (!Number.isInteger(guestCount) || guestCount < 1 || guestCount > 10) {
+    throw new HttpError(400, "Guest count must be a number between 1 and 10");
+  }
+
+  const message = String(body.message || "").slice(0, 1000);
+
+  let entry = DB.rsvps.find((r) => r.invitation_id === invitation.id && r.email === email);
+  let updated = false;
+  if (entry) {
+    updated = true;
+    entry.name = name;
+    entry.attending = attending;
+    entry.guest_count = guestCount;
+    entry.message = message;
+  } else {
+    entry = {
+      id: crypto.randomUUID(),
+      invitation_id: invitation.id,
+      name,
+      email,
+      attending,
+      guest_count: guestCount,
+      message,
+      created_date: new Date().toISOString(),
+    };
+    DB.rsvps.push(entry);
+  }
+  saveDb();
+  const payload = rsvpRecord(invitation, entry);
+  if (updated) payload.updated = true;
+  sendJson(res, updated ? 200 : 201, payload);
+}
+
+async function handleRsvpList(req, res, url) {
+  await requireUser(req);
+  const invitation = rsvpInvitationFromParams(url.searchParams);
+  const list = DB.rsvps
+    .filter((r) => r.invitation_id === invitation.id)
+    .sort((a, b) => (a.created_date < b.created_date ? 1 : -1))
+    .map((r) => rsvpRecord(invitation, r));
+  sendJson(res, 200, list);
+}
+
 // --- Router -------------------------------------------------------------------
 
 async function dispatch(req, res, url) {
@@ -696,6 +811,12 @@ async function dispatch(req, res, url) {
   if (p === "/api/uploads" && method === "POST") return handleUpload(req, res);
   if (p === "/api/uploads/stream" && method === "PUT") {
     return handleStreamUpload(req, res, url);
+  }
+
+  if (p === "/api/rsvps") {
+    if (method === "POST") return handleRsvpCreate(req, res);
+    if (method === "GET") return handleRsvpList(req, res, url);
+    throw new HttpError(405, "Method not allowed");
   }
 
   throw new HttpError(404, `No route for ${method} ${p}`);

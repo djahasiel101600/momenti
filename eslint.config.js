@@ -6,6 +6,11 @@ import pluginUnusedImports from "eslint-plugin-unused-imports";
 
 export default [
   {
+    // Global excludes: the Django backend contains no lintable frontend JS
+    // (its .venv vendored admin bundles crash the parser).
+    ignores: ["backend/**", "node_modules/**", "dist/**"],
+  },
+  {
     files: [
       "src/components/**/*.{js,mjs,cjs,jsx}",
       "src/pages/**/*.{js,mjs,cjs,jsx}",

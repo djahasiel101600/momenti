@@ -5,6 +5,12 @@
 # Local backend data (users, invitations, sessions, uploads)
 server/data/
 
+# Python / Django backend
+__pycache__/
+*.py[cod]
+backend/.venv/
+backend/staticfiles/
+
 # Logs
 /logs
 *.log

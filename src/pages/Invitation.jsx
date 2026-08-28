@@ -12,6 +12,7 @@ import EventDetails from "@/components/invitation/EventDetails";
 import Gallery from "@/components/invitation/Gallery";
 import RsvpForm from "@/components/invitation/RsvpForm";
 import StickyRsvp from "@/components/invitation/StickyRsvp";
+import MusicWidget from "@/components/invitation/MusicWidget";
 import NotFoundState from "@/components/invitation/NotFoundState";
 
 export default function Invitation() {
@@ -30,8 +31,11 @@ export default function Invitation() {
         record = null;
       }
       if (!alive) return;
-      const source = record ? normalizeInvitation(record) : getEvent(client);
-      setData(source);
+      // Both sources go through normalizeInvitation: stored records carry the
+      // editor payload, and the built-in samples (eventData.js) are legacy-
+      // shaped records whose sections/theme/headings derive from defaults.
+      const source = record || getEvent(client);
+      setData(source ? normalizeInvitation(source) : null);
       if (!source) {
         setLoading(false);
         return;

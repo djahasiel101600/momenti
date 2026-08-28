@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { base44 } from "@/api/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Image } from "@/components/ui/image";
-import { Plus, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Trash2, ExternalLink, ClipboardList } from "lucide-react";
 import { templateDefaults, templateName } from "@/lib/templates";
 import TemplatePicker from "@/components/studio/TemplatePicker";
 import InvitationEditor from "@/components/studio/InvitationEditor";
@@ -158,6 +158,12 @@ export default function Studio() {
                       >
                         <Pencil size={12} /> Edit
                       </button>
+                      <Link
+                        to={`/studio/rsvps/${it.id}`}
+                        className="inline-flex items-center gap-1.5 text-[10px] tracking-luxe-sm uppercase text-[#F2F0ED]/60 hover:text-[#C58A58] transition-colors"
+                      >
+                        <ClipboardList size={12} /> RSVPs
+                      </Link>
                       <button
                         onClick={() => handleDelete(it.id, it.title || it.couple)}
                         className="ml-auto text-[#F2F0ED]/30 hover:text-[#C58A58] transition-colors"

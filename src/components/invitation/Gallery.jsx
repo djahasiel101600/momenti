@@ -71,41 +71,41 @@ export default function Gallery({ data, eyebrow = "Moments", heading, appearance
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setActive(null)}
-            className="fixed inset-0 z-[90] inv-bg-90 backdrop-blur-sm flex items-center justify-center p-6"
+            className="fixed inset-0 z-[90] inv-bg-90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
           >
             <button
-              className="absolute top-6 right-6 inv-text-70 hover:text-[var(--inv-accent)] transition-colors"
+              className="absolute top-4 right-4 sm:top-6 sm:right-6 inv-text-70 hover:text-[var(--inv-accent)] transition-colors"
               onClick={() => setActive(null)}
               aria-label="Close"
             >
               <X size={28} strokeWidth={1} />
             </button>
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              onClick={(e) => e.stopPropagation()}
-              className="relative max-w-3xl w-full"
-            >
-              {mediaTypeFromUrl(active.url) === "video" ? (
-                <video
-                  src={active.url}
-                  controls
-                  autoPlay
-                  playsInline
-                  className="w-full max-h-[80vh] rounded-sm bg-black"
-                  aria-label={active.alt || undefined}
-                />
-              ) : (
-                <Image
-                  src={active.url}
-                  alt={active.alt}
-                  fittingType="fit"
-                  className="w-full max-h-[80vh] rounded-sm"
-                />
-              )}
-            </motion.div>
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-3xl w-full"
+          >
+            {mediaTypeFromUrl(active.url) === "video" ? (
+              <video
+                src={active.url}
+                controls
+                autoPlay
+                playsInline
+                className="w-full max-h-[80vh] rounded-sm bg-black object-contain"
+                aria-label={active.alt || undefined}
+              />
+            ) : (
+              <Image
+                src={active.url}
+                alt={active.alt}
+                fittingType="fit"
+                className="w-full max-h-[80vh] rounded-sm"
+              />
+            )}
+          </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

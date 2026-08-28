@@ -231,6 +231,7 @@ try {
       venueName: "", venueAddress: "", mapUrl: "",
       time: "", dressCode: "", story: "",
       heroImage: "/media/a2a00eea3_generated_131f7848.png",
+      heroImageMobile: "/uploads/clip-mobile.mp4",
       storyImage: "/media/acb2ce145_generated_60229421.png",
       gallery: [{ url: "/uploads/clip.mp4", alt: "highlight reel", span: "wide" }],
       accentColor: "#C58A58", backgroundColor: "#101014", countdownVisible: true,
@@ -258,6 +259,51 @@ try {
   check("norm.music.url", normalizedMedia.music.url, streamData.file_url);
   check("norm.music.autoplay_off_respected", normalizedMedia.music.autoplay, false);
   check("norm.music.loop_default_true", normalizedMedia.music.loop, true);
+  check("norm.hero_mobile_roundtrip", fetchedMedia[0].heroImageMobile, "/uploads/clip-mobile.mp4");
+
+  // --- RSVPs ----------------------------------------------------------------------
+  const rsvpPost = await jsonFetch("/api/rsvps", {
+    method: "POST",
+    body: {
+      slug: "media-invite",
+      name: "Ada Guest",
+      email: "ada@guest.dev",
+      attending: true,
+      guest_count: 3,
+      message: "Wouldn't miss it!",
+    },
+  });
+  check("rsvp.guest_submit_status", rsvpPost.status, 201);
+  check("rsvp.invitation_resolved", rsvpPost.data.slug, "media-invite");
+
+  const rsvpAnonList = await jsonFetch(`/api/rsvps?invitation=${mediaInvite.data.id}`);
+  check("rsvp.list_anonymous_status", rsvpAnonList.status, 401);
+
+  const rsvpList = await jsonFetch(`/api/rsvps?invitation=${mediaInvite.data.id}`, {
+    headers: authHeaders,
+  });
+  check("rsvp.list_status", rsvpList.status, 200);
+  check("rsvp.list_count", rsvpList.data.length, 1);
+
+  const rsvpResubmit = await jsonFetch("/api/rsvps", {
+    method: "POST",
+    body: {
+      slug: "media-invite",
+      name: "Ada Guest",
+      email: "ada@guest.dev",
+      attending: false,
+      guest_count: 1,
+    },
+  });
+  check("rsvp.upsert_status", rsvpResubmit.status, 200);
+  check("rsvp.upsert_flag", rsvpResubmit.data.updated, true);
+  check("rsvp.upsert_same_id", rsvpResubmit.data.id, rsvpPost.data.id);
+
+  const rsvpListAfter = await jsonFetch("/api/rsvps?slug=media-invite", {
+    headers: authHeaders,
+  });
+  check("rsvp.upsert_no_duplicate", rsvpListAfter.data.length, 1);
+  check("rsvp.upsert_latest_answer", rsvpListAfter.data[0].attending, false);
 
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nALL CHECKS PASSED");
   process.exitCode = failures ? 1 : 0;

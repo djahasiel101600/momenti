@@ -1,5 +1,8 @@
 // Mock data layer for momenti.co — keyed by client slug.
-// Replace with a database later. For Phase 1 this is the single source of truth.
+// Sample invitations for the public `/:slug` route when no stored record
+// matches. Records use the same flat shape the API stores (legacy fields
+// included on purpose): `normalizeInvitation` migrates them, deriving
+// sections from `countdownVisible` and defaulting theme/headings/music.
 
 export const events = {
   "john-doe": {
@@ -8,11 +11,9 @@ export const events = {
     coupleShort: "J & J",
     eventType: "Wedding",
     date: "2027-06-15T17:00:00Z",
-    venue: {
-      name: "The Grand Ballroom",
-      address: "123 Main St, New York, NY",
-      mapUrl: "https://maps.google.com/?q=The+Grand+Ballroom+New+York",
-    },
+    venueName: "The Grand Ballroom",
+    venueAddress: "123 Main St, New York, NY",
+    mapUrl: "https://maps.google.com/?q=The+Grand+Ballroom+New+York",
     time: "5:00 PM",
     dressCode: "Black Tie Optional",
     heroImage:
@@ -51,11 +52,9 @@ export const events = {
     coupleShort: "E·30",
     eventType: "Birthday Soirée",
     date: "2027-09-19T19:30:00Z",
-    venue: {
-      name: "The Rooftop Garden",
-      address: "88 Skyline Ave, San Francisco, CA",
-      mapUrl: "https://maps.google.com/?q=The+Rooftop+Garden+San+Francisco",
-    },
+    venueName: "The Rooftop Garden",
+    venueAddress: "88 Skyline Ave, San Francisco, CA",
+    mapUrl: "https://maps.google.com/?q=The+Rooftop+Garden+San+Francisco",
     time: "7:30 PM",
     dressCode: "Cocktail Festive",
     heroImage:

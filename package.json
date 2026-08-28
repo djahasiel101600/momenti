@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "server": "node server/index.mjs",
     "smoke": "node scripts/smoke-api.mjs",
+    "smoke:django": "python scripts/smoke-django.py",
     "start": "node server/index.mjs"
   },
   "dependencies": {

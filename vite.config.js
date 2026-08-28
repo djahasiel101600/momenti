@@ -6,10 +6,15 @@ import { momentiMiddleware } from './server/api.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// Fully self-hosted config (no Base44). The local API middleware handles
-// /api/* and /uploads/* inside the dev server itself, so `npm run dev`
-// starts the whole stack in one process. For production hosting use
-// `npm run build && npm start`.
+// Backend selection:
+// - Django (backend/, default): `npm run dev` proxies /api/* and /uploads/* to
+//   the DRF server (python backend/manage.py runserver, default
+//   http://127.0.0.1:8000 — override with MOMENTI_DJANGO_ORIGIN).
+// - Node (legacy): set MOMENTI_BACKEND=node to embed the zero-dependency
+//   server/api.mjs middleware into the dev server instead.
+const useDjango = (process.env.MOMENTI_BACKEND || 'django') !== 'node'
+const djangoOrigin = process.env.MOMENTI_DJANGO_ORIGIN || 'http://127.0.0.1:8000'
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -18,16 +23,31 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  ...(useDjango
+    ? {
+        server: {
+          proxy: {
+            '/api': { target: djangoOrigin, changeOrigin: false },
+            '/uploads': { target: djangoOrigin, changeOrigin: false },
+          },
+        },
+      }
+    : {}),
   plugins: [
     react(),
-    {
-      name: 'momenti-local-api',
-      configureServer(server) {
-        // Registered pre-hook so the API middleware wins over Vite's SPA
-        // fallback and static middlewares without touching HMR internals.
-        server.middlewares.use(momentiMiddleware)
-      },
-    },
+    ...(useDjango
+      ? []
+      : [
+          {
+            name: 'momenti-local-api',
+            configureServer(server) {
+              // Registered pre-hook so the API middleware wins over Vite's SPA
+              // fallback and static middlewares without touching HMR internals.
+              server.middlewares.use(momentiMiddleware)
+            },
+          },
+        ]),
   ],
 })
+
 
