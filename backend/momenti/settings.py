@@ -160,6 +160,10 @@ MOMENTI_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000        # 30 days
 MOMENTI_OTP_TTL = timedelta(minutes=10)                 # 10 minutes
 MOMENTI_RESET_TTL = timedelta(hours=1)                  # 1 hour
 MOMENTI_MAX_BODY_BYTES = 30 * 1024 * 1024               # headroom for base64 images
+# Django rejects request bodies (incl. JSON) above DATA_UPLOAD_MAX_MEMORY_SIZE
+# with a bare 400 — the 2.5 MB default would block base64 image uploads, which
+# routinely exceed it. Raise it to our own 30 MB API body cap.
+DATA_UPLOAD_MAX_MEMORY_SIZE = MOMENTI_MAX_BODY_BYTES
 MOMENTI_KIND_LIMIT_BYTES = {
     "image": 12 * 1024 * 1024,
     "audio": 150 * 1024 * 1024,
