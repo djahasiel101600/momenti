@@ -31,7 +31,6 @@ services:
       # Empty => the app generates a signing key on first boot and persists it
       # in /data. Pin via .env for multi-replica setups:
       DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-}"
-      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-}"
       GUNICORN_WORKERS: "${GUNICORN_WORKERS:-2}"
       GUNICORN_THREADS: "${GUNICORN_THREADS:-8}"
       GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-120}"
