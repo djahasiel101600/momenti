@@ -602,3 +602,20 @@ class MomentiApiTests(TestCase):
         self.assertNotIn("dev_otp", body)  # code is emailed, not echoed
         self.assertEqual(len(outbox.outbox), 1)
         self.assertEqual(outbox.outbox[0].to, ["mail@test.dev"])
+    def test_large_image_upload_succeeds(self):
+        """Regression: Django's DATA_UPLOAD_MAX_MEMORY_SIZE default (2.5 MB)
+        rejected larger base64 image uploads with a bare 400. The setting is
+        raised to the 30 MB API body cap, so a >2.5 MB payload must succeed."""
+        import base64
+
+        token = self._register_and_verify()["access_token"]
+        big = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"x" * (3 * 1024 * 1024)).decode()
+        resp = self.client.post(
+            "/api/uploads",
+            {"filename": "large.png", "data": "data:image/png;base64," + big},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertIn(".png", resp.json()["file_url"])
+
