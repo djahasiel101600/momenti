@@ -21,13 +21,13 @@ services:
       MOMENTI_DATA_DIR: /data              # volume-mounted below
       MOMENTI_DIST_DIR: /app/dist          # Django serves the built SPA
       MOMENTI_DEV_HELPERS: "off"           # never surface OTP/reset helpers in prod
-      # Host header reaching Django: by default cloudflared rewrites it to the
-      # origin name ("momenti"), so allow that; add your tunnel hostname too
-      # (or set ingress httpHostHeader to the public domain and list it here).
-      MOMENTI_ALLOWED_HOSTS: "momenti,localhost,127.0.0.1"
-      # Origin used in password-reset links; Referer fallback covers this in
-      # practice, but pin it to your tunnel domain for correctness:
-      MOMENTI_PUBLIC_ORIGIN: "https://momenti.jdp-homelab.space"
+      # cloudflared forwards the original public hostname as the Host header —
+      # it MUST be in ALLOWED_HOSTS or Django answers every request with 400
+      # (DisallowedHost). Override via .env / shell env without editing here:
+      MOMENTI_ALLOWED_HOSTS: "${MOMENTI_ALLOWED_HOSTS:-momenti.jdp-homelab.space,momenti,localhost,127.0.0.1}"
+      # Origin used in password-reset links and CSRF checks for the admin:
+      MOMENTI_PUBLIC_ORIGIN: "${MOMENTI_PUBLIC_ORIGIN:-https://momenti.jdp-homelab.space}"
+      MOMENTI_CSRF_TRUSTED_ORIGINS: "${MOMENTI_CSRF_TRUSTED_ORIGINS:-https://momenti.jdp-homelab.space}"
       GUNICORN_WORKERS: "2"
       GUNICORN_THREADS: "8"
     volumes:

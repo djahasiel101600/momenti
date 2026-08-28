@@ -61,6 +61,20 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+# Behind the Cloudflare tunnel: cloudflared always sends X-Forwarded-Proto,
+# so Django can report request.is_secure()/absolute URLs as https. The header
+# is only honored when present, so local development is unaffected.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Admin logins (and any cookie-based flow) POST through the tunnel — the
+# browser's https Origin must be trusted explicitly. The app's own API is
+# bearer-token based and does not use CSRF.
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("MOMENTI_CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",

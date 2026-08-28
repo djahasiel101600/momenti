@@ -105,12 +105,18 @@ Notes:
   token-signing secret) — gitignored, survives rebuilds, and shared with the
   legacy Node backend, so importing old data needs no copying:
   `docker compose exec momenti python manage.py import_momenti_json`
-- **Host header**: by default cloudflared rewrites it to the origin name
-  (`momenti`), which `MOMENTI_ALLOWED_HOSTS` already allows; if you set
-  ingress `httpHostHeader` to your public domain, add that domain to
-  `MOMENTI_ALLOWED_HOSTS` in docker-compose.yml.
-- **Reset links**: set `MOMENTI_PUBLIC_ORIGIN` to your tunnel domain
-  (Referer-based fallback usually covers it either way).
+- **Host header**: cloudflared forwards your public hostname
+  (`momenti.jdp-homelab.space`) as the Host header — it is pre-wired into
+  `MOMENTI_ALLOWED_HOSTS` in docker-compose.yml (all defaults are overridable
+  via a `.env` file or shell env without editing the compose file). If your
+  tunnel hostname ever changes, update `MOMENTI_ALLOWED_HOSTS` — a Host not
+  in the list makes Django answer every request with a 400 (`DisallowedHost`).
+- **Admin/CSRF**: `MOMENTI_CSRF_TRUSTED_ORIGINS` (default: your tunnel domain)
+  makes `/admin/` logins work behind the proxy. The app's own API is
+  bearer-token based and needs no CSRF. Django also honors
+  `X-Forwarded-Proto: https` from cloudflared (`SECURE_PROXY_SSL_HEADER`).
+- **Reset links**: `MOMENTI_PUBLIC_ORIGIN` pins password-reset links to your
+  tunnel domain (a Referer-based fallback covers it either way).
 - **Tuning**: `GUNICORN_WORKERS` (2), `GUNICORN_THREADS` (8),
   `GUNICORN_TIMEOUT` (120s). Gunicorn (gthread) streams large uploads
   straight to disk — the 750 MB video cap applies as usual.
@@ -132,6 +138,7 @@ All optional:
   and persisted to `<DATA_DIR>/.django-secret`)
 - `MOMENTI_DEBUG` — set `off` in production (default on for development)
 - `MOMENTI_ALLOWED_HOSTS` — comma-separated hosts (default localhost + testserver)
+- `MOMENTI_CSRF_TRUSTED_ORIGINS` — comma-separated origins trusted for admin/CSRF behind a proxy
 - `MOMENTI_DIST_DIR` — have Django host the built frontend (SPA fallback)
 - `MOMENTI_PUBLIC_ORIGIN` — origin used in generated password-reset links
 - `MOMENTI_DEV_HELPERS` — set `off` to stop surfacing OTP codes / reset links
