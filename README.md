@@ -116,8 +116,11 @@ Notes:
   straight to disk — the 750 MB video cap applies as usual.
 - Optional Django admin: `docker compose exec momenti python manage.py
   createsuperuser` → `/admin/`.
-- First boot on Linux with the bind mount may need
-  `sudo chown -R 1000:1000 ./server/data` (the container runs as uid 1000).
+- **Permissions are self-healing**: on first boot the entrypoint starts as
+  root only to fix the data directory's ownership (Docker creates missing
+  host bind-mount dirs as `root:root`, which otherwise makes SQLite fail
+  with `unable to open database file`) and then drops to the unprivileged
+  runtime user (uid 1000). No manual `chown` needed.
 
 ### Environment variables
 

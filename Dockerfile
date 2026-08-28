@@ -36,9 +36,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app/backend
 
-# Dependencies first (same layer-caching principle).
+# Dependencies first (same layer-caching principle). gosu lets the
+# entrypoint drop from root to the unprivileged runtime user after
+# bootstrapping the mounted data directory's ownership.
 COPY backend/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gosu \
+ && rm -rf /var/lib/apt/lists/* \
+ && pip install --no-cache-dir -r requirements.txt
 
 COPY backend ./
 
@@ -51,7 +56,8 @@ RUN DJANGO_SECRET_KEY=build-only python manage.py collectstatic --noinput \
 
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-USER momenti
+# No USER directive: the entrypoint starts as root only to fix the mounted
+# data dir's ownership, then drops to `momenti` via gosu before serving.
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
