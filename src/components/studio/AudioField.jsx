@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { base44 } from "@/api/client";
 import { Loader2, Upload, Music4 } from "lucide-react";
+import MediaLibrary from "./MediaLibrary";
 
 /** Audio picker: upload (auto-streamed when large) or paste any audio URL. */
 export default function AudioField({ label, value, onChange }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [showLibrary, setShowLibrary] = useState(false);
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
@@ -33,6 +35,13 @@ export default function AudioField({ label, value, onChange }) {
             {uploading ? "Uploading…" : "Upload audio"}
             <input type="file" accept="audio/*" className="hidden" onChange={handleFile} />
           </label>
+          <button
+            type="button"
+            onClick={() => setShowLibrary(true)}
+            className="inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase border border-[#F2F0ED]/20 text-[#F2F0ED]/60 px-4 py-2 hover:border-[#C58A58] hover:text-[#C58A58] transition-colors"
+          >
+            <Music4 size={14} /> Library
+          </button>
           {value && !uploading && (
             <Music4 size={16} className="text-[#F2F0ED]/40" aria-label="Track ready" />
           )}
@@ -48,6 +57,17 @@ export default function AudioField({ label, value, onChange }) {
         )}
         {error && <p className="text-[10px] text-red-400">{error}</p>}
       </div>
+      {showLibrary && (
+        <MediaLibrary
+          open={showLibrary}
+          onClose={() => setShowLibrary(false)}
+          onSelect={(url) => {
+            onChange(url);
+            setShowLibrary(false);
+          }}
+          kinds={["audio"]}
+        />
+      )}
     </div>
   );
 }

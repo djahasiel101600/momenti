@@ -56,6 +56,7 @@ export default function InvitationHero({ data }) {
           src={heroSrc}
           alt={`Scene backdrop for ${data.couple || "the celebration"}`}
           className="w-full h-full"
+          loopTransition={data.loopTransition}
         />
         <div className="absolute inset-0 inv-hero-overlay" />
       </motion.div>

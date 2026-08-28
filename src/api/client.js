@@ -223,6 +223,15 @@ const rsvpEntity = {
   },
 };
 
+/** The host's media library: previously uploaded images/videos/audio. */
+const uploadEntity = {
+  /** list({ kind: "image" | "video" | "audio" }?) -> [{name,kind,size,url,...}], newest first */
+  async list({ kind } = {}) {
+    const qs = toQuery(kind ? { kind } : {});
+    return request(`/uploads${qs ? `?${qs}` : ""}`, { auth: true });
+  },
+};
+
 // --- Integrations ---------------------------------------------------------------
 
 /**
@@ -299,6 +308,7 @@ export const api = {
   entities: {
     Invitation: invitationEntity,
     Rsvp: rsvpEntity,
+    Upload: uploadEntity,
   },
   integrations: {
     Core: {

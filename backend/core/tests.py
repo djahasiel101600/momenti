@@ -244,6 +244,7 @@ class MomentiApiTests(TestCase):
             "tags": ["outdoor", "evening"],
             "sections": [{"id": "gallery", "label": "Gallery", "visible": True}],
             "gallery": [{"url": "/uploads/clip.mp4", "alt": "highlight reel", "span": "wide"}],
+            "loopTransition": "fade",
             "music": {"url": "/uploads/loop.mp3", "autoplay": False},
             "theme": {"textColor": "#F2F0ED", "paperColor": "#F2F0ED", "displayFont": "serif"},
         }
@@ -252,6 +253,7 @@ class MomentiApiTests(TestCase):
         record = created.json()
         self.assertEqual(record["owner_email"], "smoke@test.dev")
         self.assertEqual(record["heroImageMobile"], "/uploads/hero-mobile.jpg")
+        self.assertEqual(record["loopTransition"], "fade")
         self.assertIn("created_date", record)
         self.assertIn("updated_date", record)
         self.assertEqual(record["music"]["autoplay"], False)
@@ -618,4 +620,23 @@ class MomentiApiTests(TestCase):
         )
         self.assertEqual(resp.status_code, 201, resp.content)
         self.assertIn(".png", resp.json()["file_url"])
+
+    def test_uploads_library_list(self):
+        token = self._register_and_verify()["access_token"]
+        auth = {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+        up = self.client.post(
+            "/api/uploads", {"filename": "dot.png", "data": PNG_DATA_URL}, format="json", **auth
+        )
+        self.assertEqual(up.status_code, 201)
+
+        listing = self.client.get("/api/uploads?kind=image", **auth)
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(len(listing.json()), 1)
+        item = listing.json()[0]
+        self.assertEqual(item["kind"], "image")
+        self.assertEqual(item["name"], up.json()["file_url"].split("/")[-1])
+        self.assertTrue(item["url"].startswith("/uploads/"))
+
+        # anonymous denied
+        self.assertEqual(self.client.get("/api/uploads").status_code, 401)
 

@@ -57,6 +57,7 @@ export default function Gallery({ data, eyebrow = "Moments", heading, appearance
                 alt={g.alt}
                 className="w-full h-full"
                 mediaClassName="transition-transform duration-700 group-hover:scale-105"
+                loopTransition={data.loopTransition}
               />
               <div className="absolute inset-0 bg-transparent group-hover:bg-black/20 transition-colors duration-500" />
             </motion.button>

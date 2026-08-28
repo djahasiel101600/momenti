@@ -615,6 +615,36 @@ async function handleStreamUpload(req, res, url) {
   void user;
   sendJson(res, 201, { file_url: `/uploads/${name}`, url: `/uploads/${name}`, kind, bytes: received });
 }
+
+/** GET /api/uploads?kind=... — list uploaded media (Node fallback keeps no
+ * registry, so it lists every file in the uploads dir; auth required). */
+async function handleUploadList(req, res, url) {
+  await requireUser(req);
+  const kindFilter = String(url.searchParams.get("kind") || "").trim();
+  const files = [];
+  try {
+    for (const name of fs.readdirSync(UPLOADS_DIR)) {
+      const full = path.join(UPLOADS_DIR, name);
+      const stat = fs.statSync(full);
+      if (stat.isFile()) files.push({ name, stat });
+    }
+  } catch {
+    /* uploads dir missing/empty */
+  }
+  const list = files
+    .map(({ name, stat }) => ({
+      name,
+      kind: uploadKindFor(name) || "file",
+      size: stat.size,
+      url: `/uploads/${name}`,
+      file_url: `/uploads/${name}`,
+      original_name: "",
+      created_date: stat.mtime ? stat.mtime.toISOString() : "",
+    }))
+    .filter((f) => !kindFilter || f.kind === kindFilter)
+    .sort((a, b) => (a.created_date < b.created_date ? 1 : -1));
+  sendJson(res, 200, list);
+}
 function serveUploads(res, pathname) {
   const rel = decodeURIComponent(pathname.replace(/^\/uploads\//, ""));
   const root = path.resolve(UPLOADS_DIR);
@@ -809,6 +839,7 @@ async function dispatch(req, res, url) {
   }
 
   if (p === "/api/uploads" && method === "POST") return handleUpload(req, res);
+  if (p === "/api/uploads" && method === "GET") return handleUploadList(req, res, url);
   if (p === "/api/uploads/stream" && method === "PUT") {
     return handleStreamUpload(req, res, url);
   }

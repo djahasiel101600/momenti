@@ -39,6 +39,7 @@ Keep changes focused on the user's request and preserve existing conventions.
 - `backend/core/auth.py` — stateless HMAC bearer tokens (same wire format as
   the Node server; 30-day TTL) + DRF authentication class (401 with
   WWW-Authenticate).
+- `backend/core/views.py` `GET /api/uploads?kind=` — the host's media library (auth required); paired with Studio's Library pickers.
 - `backend/core/uploads.py` — extension allowlist, per-kind size caps
   (image 12 MB / audio 150 MB / video 750 MB), filename sanitization, MIME map.
 - `backend/core/hashers.py` — legacy scrypt hasher for db.json imports
@@ -58,7 +59,8 @@ Keep changes focused on the user's request and preserve existing conventions.
 - `src/lib/templates.js` — template catalog plus the invitation customization
   schema: `templateDefaults`, `normalizeInvitation` (legacy-record migration),
   `SECTION_DEFS` / `DEFAULT_HEADINGS` / `SECTION_DEFAULT_EYEBROWS`,
-  `emphasizedHeading` and `STYLE_PRESETS`. Extend here when adding editor knobs.
+  `emphasizedHeading`, `STYLE_PRESETS` and `LOOP_TRANSITIONS` (video loop
+  fade/crossfade options). Extend here when adding editor knobs.
 - `src/components/studio/InvitationEditor.jsx` — tabbed editor (Content /
   Sections / Style / Media); shared primitives in `./EditorControls.jsx`.
   New customization fields must round-trip through buildForm → payload →

@@ -319,6 +319,13 @@ export function resolveSectionAppearance(data, id) {
   };
 }
 
+// Muted background-video loop transition options (hero / story / gallery).
+export const LOOP_TRANSITIONS = [
+  { id: "cut", label: "None (hard cut)" },
+  { id: "fade", label: "Fade" },
+  { id: "crossfade", label: "Crossfade" },
+];
+
 // Build a fresh, editable invitation object from a template id.
 
 export function templateDefaults(templateId) {
@@ -357,6 +364,7 @@ export function templateDefaults(templateId) {
     sections: buildDefaultSections(),
     sectionStyles: {}, // per-section {bgColor,textColor,accentColor}, blank = inherit
     music: { url: "", autoplay: true, loop: true },
+    loopTransition: "cut",
     theme: { textColor: "#F2F0ED", paperColor: "#F2F0ED", displayFont: "serif" },
   };
 }
@@ -430,6 +438,9 @@ export function normalizeInvitation(r) {
       autoplay: musicIn.autoplay !== false,
       loop: musicIn.loop !== false,
     },
+    loopTransition: LOOP_TRANSITIONS.some((t) => t.id === r.loopTransition)
+      ? r.loopTransition
+      : "cut",
     sectionStyles: sanitizeSectionStyles(r.sectionStyles),
     theme: {
       textColor: isHexColor(themeIn.textColor) ? themeIn.textColor : "#F2F0ED",

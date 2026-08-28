@@ -753,6 +753,28 @@ class UploadView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    def get(self, request):
+        """GET /api/uploads?kind=image|video|audio - the host's media library
+        (auth required): previously uploaded images/videos/audio, newest first."""
+        kind = str(request.query_params.get("kind") or "").strip()
+        queryset = Upload.objects.all().order_by("-created_date")
+        if kind:
+            queryset = queryset.filter(kind=kind)
+        return Response(
+            [
+                {
+                    "name": up.name,
+                    "kind": up.kind,
+                    "size": up.size,
+                    "url": f"/uploads/{up.name}",
+                    "file_url": f"/uploads/{up.name}",
+                    "original_name": up.original_name or "",
+                    "created_date": up.created_date.isoformat().replace("+00:00", "Z"),
+                }
+                for up in queryset
+            ]
+        )
+
     def post(self, request):
         body = body_dict(request)
         data_url = str(body.get("data") or "")

@@ -51,6 +51,7 @@ export default function StorySection({ data, eyebrow = "Our Story", heading, app
                 src={data.storyImage}
                 alt={`A quiet moment from the story of ${data.couple || "us"}`}
                 className="w-full h-full"
+                loopTransition={data.loopTransition}
               />
             </motion.div>
           </div>

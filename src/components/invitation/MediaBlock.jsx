@@ -1,5 +1,6 @@
 import { Image } from "@/components/ui/image";
 import { mediaTypeFromUrl } from "@/lib/templates";
+import LoopingVideo from "@/components/invitation/LoopingVideo";
 
 /**
  * Renders an image or video slot consistently across the invitation.
@@ -15,6 +16,7 @@ export default function MediaBlock({
   className = "",
   mediaClassName = "",
   controls = false,
+  loopTransition = "cut",
   imageProps = {},
 }) {
   const type = mediaTypeFromUrl(src);
@@ -24,17 +26,19 @@ export default function MediaBlock({
   if (type === "video") {
     return (
       <div className={`relative overflow-hidden ${className}`}>
-        <video
-          src={src}
-          className={`w-full h-full ${controls ? "" : "object-cover"} ${mediaClassName}`}
-          autoPlay={!controls}
-          muted={!controls}
-          loop={!controls}
-          playsInline
-          controls={controls}
-          preload="metadata"
-          aria-label={alt || undefined}
-        />
+        {controls ? (
+          <video
+            src={src}
+            className={`w-full h-full object-contain ${mediaClassName}`}
+            autoPlay
+            controls
+            playsInline
+            preload="metadata"
+            aria-label={alt || undefined}
+          />
+        ) : (
+          <LoopingVideo src={src} transition={loopTransition} className={mediaClassName} alt={alt} />
+        )}
       </div>
     );
   }

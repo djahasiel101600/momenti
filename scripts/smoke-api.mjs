@@ -181,6 +181,10 @@ try {
     body: { filename: "dot.png", data: PNG },
   });
   check("upload.anonymous_status", anonUpload.status, 401);
+  const upList = await jsonFetch("/api/uploads?kind=image", { headers: authHeaders });
+  check("library.list_status", upList.status, 200);
+  check("library.contains_upload", (upList.data || []).some((u) => u.name === up.data.file_url.split("/").pop()), true);
+
 
   const traversal = await fetch(`${BASE}/uploads/..%2Fdb.json`);
   check("traversal.blocked", [400, 404].includes(traversal.status), true);

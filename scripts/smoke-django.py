@@ -265,6 +265,12 @@ def main():
             body={"filename": "dot.png", "data": PNG_DATA_URL},
         )
         check("upload.anonymous_status", status, 401)
+        status, library, _ = request("/api/uploads?kind=image", token=token)
+        check("library.list_status", status, 200)
+        check("library.contains_upload", any(u.get("name") == uploaded.get("file_url", "").split("/")[-1] for u in (library or [])), True)
+        status, _, _ = request("/api/uploads", token="bad-token")
+        check("library.bad_token_status", status, 401)
+
 
         status, _, _ = request("/uploads/..%2Fdb.json")
         check("traversal.blocked", status in (400, 404), True)

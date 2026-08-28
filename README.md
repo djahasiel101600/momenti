@@ -203,6 +203,7 @@ Entities & misc:
 - `GET /api/entities/invitations?sort=-created_date&limit=N&<field>=value` — list/filter
 - `GET/POST /api/entities/invitations` · `PATCH|DELETE /api/entities/invitations/:id`
 - `POST /api/uploads` — `{filename,data:<data-url>}` (base64 JSON, images only) → `{file_url:"/uploads/<name>"}`
+- `GET /api/uploads?kind=image|video|audio` — the host's media library (auth required) → `[{name,kind,size,url,created_date}]`, newest first
 - `PUT /api/uploads/stream?filename=<enc>` — raw-body streaming upload for large audio/video (auth required; extension allowlist; per-kind size caps: images 12 MB, audio 150 MB, video 750 MB) → `{file_url}`
 - `GET /uploads/<name>` — uploaded media with correct MIME types
 - `GET /api/rsvps?invitation=<id>|slug=<slug>` — the host's guest ledger (auth required) → `[{id,invitation_id,slug,name,email,attending,guest_count,message,created_date}]`
@@ -245,7 +246,10 @@ Story/Details/Gallery/RSVP), **Style** (accent/background/text colors,
 curated palette presets, serif-vs-sans display typeface) and **Media**
 (music track with autoplay/loop toggles, hero & story backdrop accepting
 images *or* videos, and a gallery manager where each photo slot also takes
-video clips). Public pages render sections in the chosen order; every knob
+video clips). Every media field also has a **Library** button to reuse files
+you've already uploaded, and a **Video playback → Loop transition** selector
+(None / Fade / Crossfade) controls how muted background videos restart on
+their loop. Public pages render sections in the chosen order; every knob
 degrades gracefully for records saved before a given field existed — see
 `normalizeInvitation`.
 

@@ -20,6 +20,7 @@ import {
   SECTION_DEFAULT_EYEBROWS,
   DEFAULT_HEADINGS,
   STYLE_PRESETS,
+  LOOP_TRANSITIONS,
 } from "@/lib/templates";
 
 const SECTION_STYLE_KEYS = ["bgColor", "textColor", "accentColor"];
@@ -76,6 +77,7 @@ function buildForm(initial) {
     heroImage: i.heroImage || "",
     heroImageMobile: i.heroImageMobile || "",
     storyImage: i.storyImage || "",
+    loopTransition: i.loopTransition || "cut",
     gallery: Array.isArray(i.gallery) ? i.gallery.map((g) => ({ ...g })) : [],
     accentColor: i.accentColor || "#C58A58",
     backgroundColor: i.backgroundColor || "#0A0A0A",
@@ -473,6 +475,19 @@ export default function InvitationEditor({ initial, recordId, onSaved, onCancel 
                   <span className="text-[#F2F0ED]/60">Story media:</span> 1200 × 1600 px portrait (3:4 frame). Videos are welcome in
                   every slot (muted, looping) — 1080p keeps them crisp, 750 MB max.
                 </p>
+              </section>
+
+              <section>
+                <Header>Video playback</Header>
+                <div className="max-w-md">
+                  <SelectField
+                    label="Loop transition"
+                    value={form.loopTransition}
+                    onChange={(v) => set("loopTransition", v)}
+                    options={LOOP_TRANSITIONS}
+                    hint="How muted hero / story / gallery videos transition when they restart. Gallery lightbox videos keep their native controls."
+                  />
+                </div>
               </section>
 
               <section>

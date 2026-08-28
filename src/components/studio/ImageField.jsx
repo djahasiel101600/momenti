@@ -2,12 +2,14 @@
 import { base44 } from "@/api/client";
 import { mediaTypeFromUrl } from "@/lib/templates";
 import { Image } from "@/components/ui/image";
-import { Loader2, Upload } from "lucide-react";
+import { Loader2, Upload, Images } from "lucide-react";
+import MediaLibrary from "./MediaLibrary";
 
 // Accepts images AND videos; the thumbnail previews either kind.
 export default function ImageField({ label, value, onChange, accept = "image/*,video/*" }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [showLibrary, setShowLibrary] = useState(false);
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
@@ -55,6 +57,13 @@ export default function ImageField({ label, value, onChange, accept = "image/*,v
             {uploading ? "Uploading…" : "Upload"}
             <input type="file" accept={accept} className="hidden" onChange={handleFile} />
           </label>
+          <button
+            type="button"
+            onClick={() => setShowLibrary(true)}
+            className="inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase border border-[#F2F0ED]/20 text-[#F2F0ED]/60 px-4 py-2 hover:border-[#C58A58] hover:text-[#C58A58] transition-colors"
+          >
+            <Images size={14} /> Library
+          </button>
           <input
             value={value || ""}
             onChange={(e) => onChange(e.target.value)}
@@ -67,6 +76,17 @@ export default function ImageField({ label, value, onChange, accept = "image/*,v
           {error && <p className="text-[10px] text-red-400">{error}</p>}
         </div>
       </div>
+      {showLibrary && (
+        <MediaLibrary
+          open={showLibrary}
+          onClose={() => setShowLibrary(false)}
+          onSelect={(url) => {
+            onChange(url);
+            setShowLibrary(false);
+          }}
+          kinds={["image", "video"]}
+        />
+      )}
     </div>
   );
 }
