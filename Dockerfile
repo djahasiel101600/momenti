@@ -21,6 +21,9 @@ RUN npm ci
 COPY index.html vite.config.js tailwind.config.js postcss.config.js ./
 COPY src ./src
 COPY public ./public
+# vite.config.js statically imports the legacy Node middleware — the file
+# must exist for the config to load, even though the container never runs it.
+COPY server ./server
 RUN npm run build
 
 ########## 2) Python runtime ####################################################
