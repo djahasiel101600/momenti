@@ -252,6 +252,17 @@ degrades gracefully for records saved before a given field existed — see
 leave the field blank to keep the built-in copy ("How we met.", "When &
 where.", …). The field's hint shows exactly which built-in line applies.
 
+### Sharing templates
+
+Invitations can be exported as shareable `.json` template files and imported
+back into any momenti studio: use the **Export** action on a studio card (or
+**Export template** in the editor's publish sidebar), and the **Import**
+button in the studio header to load one. Imports open in the editor unsaved —
+review, adjust the slug (it's auto-uniquified so live pages never collide) and
+save. The design round-trips fully; built-in `/media/` images transfer across
+installations, while uploaded `/uploads/` media is instance-local and should
+be re-uploaded after importing elsewhere.
+
 ## Migration Notes (Base44 detachment)
 
 The app previously used the Base44 platform for hosting, its SDK, auth,

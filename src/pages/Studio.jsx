@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Image } from "@/components/ui/image";
-import { Plus, Pencil, Trash2, ExternalLink, ClipboardList } from "lucide-react";
+import { Plus, Pencil, Trash2, ExternalLink, ClipboardList, Upload, Download } from "lucide-react";
 import { templateDefaults, templateName } from "@/lib/templates";
+import { exportInvitation, parseInvitationImport } from "@/lib/invitationTransfer";
 import TemplatePicker from "@/components/studio/TemplatePicker";
 import InvitationEditor from "@/components/studio/InvitationEditor";
 
@@ -20,6 +21,7 @@ export default function Studio() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("list");
   const [editing, setEditing] = useState(null);
+  const fileInputRef = useRef(null);
   const { toast } = useToast();
 
   const load = async () => {
@@ -65,6 +67,42 @@ export default function Studio() {
     load();
   };
 
+  // --- Template sharing (import/export) ---------------------------------------
+
+  const handleExport = (it) => {
+    try {
+      exportInvitation(it);
+      toast({
+        title: "Template exported",
+        description: "Share the .json file — anyone can import it from their studio.",
+      });
+    } catch (e) {
+      toast({ title: "Export failed", variant: "destructive" });
+    }
+  };
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-importing the same file later
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const payload = parseInvitationImport(text, items.map((it) => it.slug));
+      setEditing({ recordId: null, initial: payload });
+      setView("edit");
+      toast({
+        title: "Template imported",
+        description: `Review it and save as “${payload.slug}”.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Import failed",
+        description: err?.message || "Could not read that file.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-[#F2F0ED]">
       <header className="border-b border-white/10">
@@ -87,12 +125,27 @@ export default function Studio() {
                 Back to studio
               </button>
             ) : (
-              <button
-                onClick={() => setView("pick")}
-                className="inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase bg-[#C58A58] text-[#0A0A0A] px-5 py-2.5 hover:bg-[#d89a68] transition-colors"
-              >
-                <Plus size={14} /> New invitation
-              </button>
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  onChange={handleImportFile}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase border border-[#F2F0ED]/20 text-[#F2F0ED]/60 px-5 py-2.5 hover:border-[#C58A58] hover:text-[#C58A58] transition-colors"
+                >
+                  <Upload size={14} /> Import
+                </button>
+                <button
+                  onClick={() => setView("pick")}
+                  className="inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase bg-[#C58A58] text-[#0A0A0A] px-5 py-2.5 hover:bg-[#d89a68] transition-colors"
+                >
+                  <Plus size={14} /> New invitation
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -164,6 +217,13 @@ export default function Studio() {
                       >
                         <ClipboardList size={12} /> RSVPs
                       </Link>
+                      <button
+                        onClick={() => handleExport(it)}
+                        className="inline-flex items-center gap-1.5 text-[10px] tracking-luxe-sm uppercase text-[#F2F0ED]/60 hover:text-[#F2F0ED] transition-colors"
+                        aria-label="Export as template file"
+                      >
+                        <Download size={12} /> Export
+                      </button>
                       <button
                         onClick={() => handleDelete(it.id, it.title || it.couple)}
                         className="ml-auto text-[#F2F0ED]/30 hover:text-[#C58A58] transition-colors"

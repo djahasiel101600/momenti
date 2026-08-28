@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { base44 } from "@/api/client";
 import { useToast } from "@/components/ui/use-toast";
-import { Plus, Trash2, Save, ArrowLeft, ChevronUp, ChevronDown, Crop } from "lucide-react";
+import { Plus, Trash2, Save, ArrowLeft, ChevronUp, ChevronDown, Crop, Download } from "lucide-react";
+import { exportInvitationForm, downloadBlob } from "@/lib/invitationTransfer";
 import ImageField from "./ImageField";
 import AudioField from "./AudioField";
 import {
@@ -143,6 +144,19 @@ export default function InvitationEditor({ initial, recordId, onSaved, onCancel 
   const removeGallery = (i) => set("gallery", form.gallery.filter((_, idx) => idx !== i));
   const updateGallery = (i, patch) =>
     set("gallery", form.gallery.map((g, idx) => (idx === i ? { ...g, ...patch } : g)));
+
+  const handleExportTemplate = () => {
+    try {
+      const { filename, blob } = exportInvitationForm(form);
+      downloadBlob(filename, blob);
+      toast({
+        title: "Template exported",
+        description: "Share the .json file — it can be imported from any momenti studio.",
+      });
+    } catch (e) {
+      toast({ title: "Export failed", variant: "destructive" });
+    }
+  };
 
   const handleSave = async () => {
     if (!form.slug || !form.couple || !form.eventType || !form.date) {
@@ -555,6 +569,12 @@ export default function InvitationEditor({ initial, recordId, onSaved, onCancel 
                 Save once to unlock preview
               </p>
             )}
+            <button
+              onClick={handleExportTemplate}
+              className="inline-flex items-center justify-center gap-2 text-xs tracking-luxe-sm uppercase border border-[#F2F0ED]/20 text-[#F2F0ED]/60 py-4 hover:border-[#C58A58] hover:text-[#C58A58] transition-colors"
+            >
+              <Download size={14} /> Export template
+            </button>
             <button
               onClick={handleSave}
               disabled={saving}
