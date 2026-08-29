@@ -35,7 +35,16 @@ Keep changes focused on the user's request and preserve existing conventions.
 - `backend/core/models.py` — User (email login, UUID pk), Invitation
   (schemaless `data` JSONField + unique `slug` column + owner fields), Rsvp
   (guest replies, upserted per invitee email), OtpCode / PendingRegistration /
-  PendingPasswordReset (hashed, TTL'd), Upload.
+  PendingPasswordReset (hashed, TTL'd), Upload, Plan, Subscription (provider-agnostic
+  entitlements; seeded free/pro in migration `0005_seed_plans`).
+- `backend/core/billing.py` — plans/quotas core: `plan_for_user`,
+  `enforce_invitation_quota`, `storage_allowance_bytes`, `grant_subscription`,
+  `billing_payload`. Provider-agnostic by design — Phase 3 (PayMongo checkout/
+  webhook) will call `grant_subscription` with `provider="paymongo"`.
+- `backend/core/management/commands/billing_activate.py` — pre-PayMongo admin
+  toggle: `manage.py billing_activate --email host@x.com --plan pro`.
+- `backend/momenti/settings.py` — `MOMENTI_QUOTA_ENFORCEMENT` (default on) and
+  `MOMENTI_BILLING_MANUAL_ACTIVATION` (default on) knobs.
 - `backend/core/auth.py` — stateless HMAC bearer tokens (same wire format as
   the Node server; 30-day TTL) + DRF authentication class (401 with
   WWW-Authenticate).

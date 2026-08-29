@@ -78,6 +78,7 @@ function buildForm(initial) {
     heroImageMobile: i.heroImageMobile || "",
     storyImage: i.storyImage || "",
     loopTransition: i.loopTransition || "cut",
+    status: i.status || "published",
     gallery: Array.isArray(i.gallery) ? i.gallery.map((g) => ({ ...g })) : [],
     accentColor: i.accentColor || "#C58A58",
     backgroundColor: i.backgroundColor || "#0A0A0A",
@@ -568,6 +569,18 @@ export default function InvitationEditor({ initial, recordId, onSaved, onCancel 
             <p className="mt-2 text-[11px] text-[#F2F0ED]/40 break-all">
               momenti.co/{form.slug || "slug"}
             </p>
+          </div>
+          <div>
+            <SelectField
+              label="Status"
+              value={form.status}
+              onChange={(v) => set("status", v)}
+              options={[
+                { value: "published", label: "Published — visible to guests" },
+                { value: "draft", label: "Draft — hidden from guests" },
+              ]}
+              hint="Drafts are invisible on the public site and can't take RSVPs."
+            />
           </div>
           <div className="flex flex-col gap-3">
             {recordId && form.slug ? (

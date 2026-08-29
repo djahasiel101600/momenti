@@ -1,4 +1,4 @@
-// End-to-end smoke test for the local momenti backend.
+﻿// End-to-end smoke test for the local momenti backend.
 //
 // Spawns server/index.mjs against an isolated temp data dir, then exercises
 // the whole public surface: health/settings, register -> OTP -> token -> me,
@@ -134,7 +134,7 @@ try {
   });
   check("create.b.status", recB.status, 201);
 
-  const list = (await jsonFetch("/api/entities/invitations?sort=-created_date&limit=10")).data;
+  const list = (await jsonFetch("/api/entities/invitations?sort=-created_date&limit=10", { headers: authHeaders })).data;
   check("list.newest_first", list[0]?.slug, "beta-gala");
   check("list.count", list.length, 2);
 
@@ -161,7 +161,7 @@ try {
     headers: authHeaders,
   });
   check("delete.ok", del.data.ok, true);
-  const afterDelete = (await jsonFetch("/api/entities/invitations?sort=-created_date")).data;
+  const afterDelete = (await jsonFetch("/api/entities/invitations?sort=-created_date", { headers: authHeaders })).data;
   check("list.after_delete_count", afterDelete.length, 1);
 
   // --- uploads ----------------------------------------------------------------

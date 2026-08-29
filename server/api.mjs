@@ -1,4 +1,4 @@
-// Zero-dependency local backend for momenti.
+﻿// Zero-dependency local backend for momenti.
 //
 // One connect-compatible middleware serves everything under /api/* and
 // /uploads/* so the app runs fully self-hosted:
@@ -334,7 +334,7 @@ async function handleRegister(req, res) {
   }
   if (findUserByEmail(email)) throw new HttpError(409, "An account with this email already exists");
   // No mailer exists locally, so verification cannot deliver an emailed code
-  // through a hosted flow â€” queue the credentials until the OTP is verified
+  // through a hosted flow Ã¢â‚¬â€ queue the credentials until the OTP is verified
   // (handleVerifyOtp), surfacing the code via DEV_HELPERS meanwhile.
   DB.pendingRegs[email] = { passwordHash: hashPassword(String(body.password)), expiresAt: Date.now() + OTP_TTL_MS };
   const otp = createOtp(email);
@@ -449,14 +449,17 @@ async function handleResetConfirm(req, res) {
 
 const INVITATION_PATH = /^\/api\/entities\/(?:invitation|invitations)(?:\/([^/]+))?$/i;
 
-function handleListInvitations(res, searchParams) {
+function handleListInvitations(res, searchParams, user = null) {
   const filters = [];
   for (const [key, value] of searchParams.entries()) {
     if (!["sort", "limit", "offset"].includes(key)) filters.push([key, value]);
   }
 
+  const scoped = user
+    ? DB.invitations.filter((rec) => rec.owner_email === user.email)
+    : DB.invitations.filter((rec) => rec.status !== "draft");
   const matched = filters.length
-    ? DB.invitations.filter((rec) =>
+    ? scoped.filter((rec) =>
         filters.every(([k, v]) => {
           const rv = rec?.[k];
           if (rv === undefined || rv === null) return false;
@@ -465,7 +468,7 @@ function handleListInvitations(res, searchParams) {
             : String(rv) === v;
         })
       )
-    : [...DB.invitations];
+    : [...scoped];
 
   applyEntitySort(matched, searchParams.get("sort"));
 
@@ -478,8 +481,10 @@ function handleListInvitations(res, searchParams) {
 async function handleCreateInvitation(req, res, user) {
   const payload = await readJsonBody(req);
   assertSlugAvailable(null, payload);
+  const status = String(payload.status || "published");
+  if (!["draft", "published"].includes(status)) throw new HttpError(400, "Status must be draft or published");
   const now = new Date().toISOString();
-  const record = { ...payload, id: crypto.randomUUID(), owner_email: user.email, created_date: now, updated_date: now };
+  const record = { ...payload, status, id: crypto.randomUUID(), owner_email: user.email, created_date: now, updated_date: now };
   DB.invitations.push(record);
   saveDb();
   sendJson(res, 201, record);
@@ -488,31 +493,39 @@ async function handleCreateInvitation(req, res, user) {
 async function handleUpdateInvitation(req, res, user, id) {
   const idx = DB.invitations.findIndex((rec) => rec.id === id);
   if (idx === -1) throw new HttpError(404, "Invitation not found");
+  if (DB.invitations[idx].owner_email !== user.email) throw new HttpError(404, "Invitation not found");
   const patch = await readJsonBody(req);
+  if ("status" in patch && !["draft", "published"].includes(String(patch.status))) {
+    throw new HttpError(400, "Status must be draft or published");
+  }
   assertSlugAvailable(id, patch);
   const previous = DB.invitations[idx];
-  DB.invitations[idx] = {
+  const merged = {
     ...previous,
     ...patch,
     id: previous.id, // identity fields are immutable
     owner_email: previous.owner_email || user.email,
     updated_date: new Date().toISOString(),
   };
+  merged.status = merged.status || previous.status || "published";
+  DB.invitations[idx] = merged;
   saveDb();
   sendJson(res, 200, DB.invitations[idx]);
 }
 
-function handleDeleteInvitation(res, id) {
+function handleDeleteInvitation(res, id, user) {
   const idx = DB.invitations.findIndex((rec) => rec.id === id);
   if (idx === -1) throw new HttpError(404, "Invitation not found");
+  if (user && DB.invitations[idx].owner_email !== user.email) throw new HttpError(404, "Invitation not found");
   DB.invitations.splice(idx, 1);
   saveDb();
   sendJson(res, 200, { ok: true });
 }
 
-async function handleGetInvitation(res, id) {
+async function handleGetInvitation(res, id, user) {
   const record = DB.invitations.find((rec) => rec.id === id);
   if (!record) throw new HttpError(404, "Invitation not found");
+  if (user && record.owner_email !== user.email) throw new HttpError(404, "Invitation not found");
   sendJson(res, 200, record);
 }
 // --- Uploads ---------------------------------------------------------------------
@@ -616,7 +629,7 @@ async function handleStreamUpload(req, res, url) {
   sendJson(res, 201, { file_url: `/uploads/${name}`, url: `/uploads/${name}`, kind, bytes: received });
 }
 
-/** GET /api/uploads?kind=... — list uploaded media (Node fallback keeps no
+/** GET /api/uploads?kind=... â€” list uploaded media (Node fallback keeps no
  * registry, so it lists every file in the uploads dir; auth required). */
 async function handleUploadList(req, res, url) {
   await requireUser(req);
@@ -744,6 +757,8 @@ async function handleRsvpCreate(req, res) {
 
   const message = String(body.message || "").slice(0, 1000);
 
+  if (invitation.status === "draft") throw new HttpError(404, "Invitation not found");
+
   let entry = DB.rsvps.find((r) => r.invitation_id === invitation.id && r.email === email);
   let updated = false;
   if (entry) {
@@ -772,8 +787,9 @@ async function handleRsvpCreate(req, res) {
 }
 
 async function handleRsvpList(req, res, url) {
-  await requireUser(req);
+  const user = await requireUser(req);
   const invitation = rsvpInvitationFromParams(url.searchParams);
+  if (invitation.owner_email !== user.email) throw new HttpError(404, "Invitation not found");
   const list = DB.rsvps
     .filter((r) => r.invitation_id === invitation.id)
     .sort((a, b) => (a.created_date < b.created_date ? 1 : -1))
@@ -828,13 +844,17 @@ async function dispatch(req, res, url) {
   if (invMatch) {
     const id = invMatch[1];
     if (method === "GET") {
-      return id ? handleGetInvitation(res, id) : handleListInvitations(res, url.searchParams);
+      if (id) return handleGetInvitation(res, id, await requireUser(req).catch(() => null));
+      const hasSlug = [...url.searchParams.keys()].includes("slug");
+      if (hasSlug) return handleListInvitations(res, url.searchParams, null); // guest, published-only
+      const listUser = await requireUser(req); // 401 when no bearer token
+      return handleListInvitations(res, url.searchParams, listUser);
     }
     const user = await requireUser(req);
     if (method === "POST") return handleCreateInvitation(req, res, user);
     if (!id) throw new HttpError(405, "Specify an invitation id");
     if (method === "PUT" || method === "PATCH") return handleUpdateInvitation(req, res, user, id);
-    if (method === "DELETE") return handleDeleteInvitation(res, id);
+    if (method === "DELETE") return handleDeleteInvitation(res, id, user);
     throw new HttpError(405, "Method not allowed");
   }
 

@@ -116,12 +116,27 @@ TEMPLATES = [
     },
 ]
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": DATA_DIR / "django.sqlite3",
+# Database: SQLite by default (zero-config, single file in the data dir).
+# Set MOMENTI_DB_ENGINE=postgres for the SaaS posture — docker-compose bundles
+# a postgres service (see README for the SQLite -> Postgres data migration).
+if os.environ.get("MOMENTI_DB_ENGINE", "").strip().lower() == "postgres":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("MOMENTI_DB_NAME", "momenti"),
+            "USER": os.environ.get("MOMENTI_DB_USER", "momenti"),
+            "PASSWORD": os.environ.get("MOMENTI_DB_PASSWORD", ""),
+            "HOST": os.environ.get("MOMENTI_DB_HOST", "postgres"),
+            "PORT": os.environ.get("MOMENTI_DB_PORT", "5432"),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": DATA_DIR / "django.sqlite3",
+        }
+    }
 
 AUTH_USER_MODEL = "core.User"
 
@@ -169,6 +184,28 @@ MOMENTI_KIND_LIMIT_BYTES = {
     "audio": 150 * 1024 * 1024,
     "video": 750 * 1024 * 1024,
 }
+
+# --- SaaS billing (Phase 2) ------------------------------------------------------
+# Quota enforcement (plan limits). Defaults ON; the legacy Node backend does not
+# enforce quotas, and local dev can disable via env.
+MOMENTI_QUOTA_ENFORCEMENT = (
+    os.environ.get("MOMENTI_QUOTA_ENFORCEMENT", "").strip().lower() not in {"off", "false", "0", "no"}
+)
+# Manual admin activation toggle (pre-PayMongo). Turn OFF once the checkout /
+
+# --- PayMongo billing (SaaS Phase 3) ---------------------------------------
+MOMENTI_PAYMONGO_SECRET_KEY = os.environ.get("MOMENTI_PAYMONGO_SECRET_KEY", "").strip()
+MOMENTI_PAYMONGO_WEBHOOK_SECRET = os.environ.get("MOMENTI_PAYMONGO_WEBHOOK_SECRET", "").strip()
+MOMENTI_PAYMONGO_MODE = os.environ.get("MOMENTI_PAYMONGO_MODE", "test").strip().lower() or "test"
+MOMENTI_PAYMONGO_BASE_URL = (
+    os.environ.get("MOMENTI_PAYMONGO_BASE_URL", "").strip()
+    or "https://api.paymongo.com/v1"
+)
+# webhook path is live so only the provider can grant plans.
+MOMENTI_BILLING_MANUAL_ACTIVATION = (
+    os.environ.get("MOMENTI_BILLING_MANUAL_ACTIVATION", "").strip().lower()
+    not in {"off", "false", "0", "no"}
+)
 
 # --- Email (SMTP) --------------------------------------------------------------
 # When MOMENTI_EMAIL_HOST is set, verification codes and password-reset links

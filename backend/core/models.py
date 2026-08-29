@@ -74,6 +74,8 @@ class Invitation(models.Model):
         related_name="invitations",
     )
     owner_email = models.EmailField(blank=True, default="")
+    STATUS_CHOICES = [("draft", "Draft"), ("published", "Published")]
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="published")
     created_date = models.DateTimeField(auto_now_add=True)
     updated_date = models.DateTimeField(auto_now=True)
 
@@ -159,3 +161,81 @@ class Upload(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Plan(models.Model):
+    """A billable tier. Price is in PHP centavos (0 = free); `None` limits mean
+    unlimited. Feature flags drive Studio affordances (hide_branding will gate
+    the 'Powered by momenti' badge; custom_domain is a future SaaS flag).
+    """
+
+    code = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=100)
+    price_cents = models.PositiveIntegerField(default=0)  # PHP centavos (0 = free)
+    billing_period = models.CharField(max_length=10, default="month")  # month | year
+    max_invitations = models.PositiveIntegerField(null=True, blank=True)  # None = unlimited
+    max_storage_mb = models.PositiveIntegerField(null=True, blank=True)
+    hide_branding = models.BooleanField(default=False)
+    custom_domain = models.BooleanField(default=False)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "code"]
+
+    def __str__(self):
+        return self.code
+
+
+class Subscription(models.Model):
+    """A user's current plan entitlement. Provider-agnostic: `provider` names
+    the billing source ('manual' before PayMongo, 'paymongo' in Phase 3) and
+    `provider_ref` carries the provider's reference (checkout/webhook id). Only
+    the checkout/webhook layer ever touches the provider, so swapping providers
+    later means changing that layer, not this model.
+    """
+
+    STATUS_CHOICES = [
+        ("active", "Active"),
+        ("past_due", "Past due"),
+        ("canceled", "Canceled"),
+        ("trialing", "Trialing"),
+    ]
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="subscription",
+    )
+    plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="subscriptions")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="active")
+    provider = models.CharField(max_length=20, blank=True, default="manual")
+    provider_ref = models.CharField(max_length=255, blank=True, default="")
+    current_period_start = models.DateTimeField(null=True, blank=True)
+    current_period_end = models.DateTimeField(null=True, blank=True)
+    cancel_at_period_end = models.BooleanField(default=False)
+    created_date = models.DateTimeField(auto_now_add=True)
+    updated_date = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user_id}:{self.plan.code} ({self.status})"
+
+
+
+class PendingCheckout(models.Model):
+    """A checkout session created with PayMongo, keyed by its reference so the
+    webhook can map payment success back to the user + plan (idempotent)."""
+
+    reference = models.CharField(max_length=100, unique=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="checkouts"
+    )
+    plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="checkouts")
+    status = models.CharField(max_length=10, default="pending")  # pending | paid | failed | expired
+    provider_ref = models.CharField(max_length=255, blank=True, default="")
+    period_days = models.PositiveIntegerField(default=30)
+    created_date = models.DateTimeField(auto_now_add=True)
+    updated_date = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.reference} ({self.status})"

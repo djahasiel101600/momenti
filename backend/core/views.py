@@ -12,6 +12,7 @@ import base64
 import binascii
 import functools
 import hashlib
+import json
 import hmac
 import logging
 import os
@@ -32,7 +33,33 @@ from rest_framework.views import APIView
 
 from .auth import issue_token
 from .errors import MomentiError
-from .models import Invitation, OtpCode, PendingPasswordReset, PendingRegistration, Rsvp, Upload, User
+from .models import (
+    Invitation,
+    OtpCode,
+    PendingCheckout,
+    PendingPasswordReset,
+    PendingRegistration,
+    Plan,
+    Rsvp,
+    Subscription,
+    Upload,
+    User,
+)
+from .billing import (
+    active_subscription_for,
+    billing_period_days,
+    billing_payload,
+    enforce_invitation_quota,
+    enforce_storage_quota,
+    grant_subscription,
+    storage_allowance_bytes,
+)
+from .paymongo import (
+    create_checkout_session,
+    handle_webhook_event,
+    paymongo_configured,
+    verify_webhook_signature,
+)
 from .serializers import InvitationSerializer, RsvpSerializer, UserPublicSerializer
 from .uploads import (
     ALLOWED_UPLOAD_EXT,
@@ -381,6 +408,15 @@ def _get_invitation_or_404(invitation_id):
     return invitation
 
 
+def _get_owned_invitation_or_404(invitation_id, user):
+    """Tenancy: hosts may only touch their own invitations. 404 (not 403) so
+    other hosts' invitation ids aren't leaked."""
+    invitation = _get_invitation_or_404(invitation_id)
+    if invitation.owner_id != user.id:
+        raise MomentiError("Invitation not found", 404)
+    return invitation
+
+
 def _js_str(value):
     """JS String() coercion for the Node list-filter parity fallback."""
     if isinstance(value, bool):
@@ -476,6 +512,18 @@ class InvitationListCreate(APIView):
                 filters.append((key, str(value)))
 
         queryset = Invitation.objects.all()
+
+        # Tenancy: the studio lists the owner's invitations. Guests (no bearer
+        # token) may only look up a single published invitation by slug - the
+        # lookup the public invitation page performs. Drafts are invisible to
+        # guests and cannot take RSVPs.
+        if request.user.is_authenticated:
+            queryset = queryset.filter(owner=request.user)
+        elif not params.get("slug"):
+            raise MomentiError("Authentication required", 401)
+        else:
+            queryset = queryset.filter(status="published")
+
         for key, value in filters:
             if "__" in key:
                 # Flat payload keys can't contain "__"; nothing matches,
@@ -495,13 +543,13 @@ class InvitationListCreate(APIView):
             else:
                 queryset = queryset.filter(**{f"data__{key}": value})
 
-        if filters and not queryset.exists():
+        if filters and not queryset.exists() and request.user.is_authenticated:
             # DB-level exact match found nothing: replicate Node's predicate
             # verbatim (array membership + JS coercion) over the table. Data
             # volumes here are studio-scale, so this stays cheap.
             records = [
                 InvitationSerializer(invitation).data
-                for invitation in Invitation.objects.all().iterator()
+                for invitation in Invitation.objects.filter(owner=request.user).iterator()
                 if all(
                     _node_field_match(InvitationSerializer(invitation).data, key, value)
                     for key, value in filters
@@ -529,13 +577,19 @@ class InvitationListCreate(APIView):
         serializer = InvitationSerializer(data=request.data)
         serializer.is_valid()
         data = serializer.validated_data["data"]
+        status_value = str(data.get("status") or "published")
+        if status_value not in ("draft", "published"):
+            raise MomentiError("Status must be draft or published", 400)
+        data["status"] = status_value
         slug = _slug_from(data)
         if slug is not None and Invitation.objects.filter(slug=slug).exists():
             raise MomentiError(f'An invitation with the slug "{slug}" already exists', 409)
+        enforce_invitation_quota(request.user)
         try:
             invitation = Invitation.objects.create(
                 data=data,
                 slug=slug,
+                status=status_value,
                 owner=request.user,
                 owner_email=request.user.email,
             )
@@ -562,14 +616,20 @@ class InvitationDetail(APIView):
         return [IsAuthenticated()]
 
     def get(self, request, invitation_id):
-        invitation = _get_invitation_or_404(invitation_id)
+        invitation = _get_owned_invitation_or_404(invitation_id, request.user)
         return Response(InvitationSerializer(invitation).data)
 
     def _update(self, request, invitation_id):
-        invitation = _get_invitation_or_404(invitation_id)
+        invitation = _get_owned_invitation_or_404(invitation_id, request.user)
         serializer = InvitationSerializer(data=request.data)
         serializer.is_valid()
         patch = serializer.validated_data["data"]
+
+        if "status" in patch:
+            status_value = str(patch.get("status") or "published")
+            if status_value not in ("draft", "published"):
+                raise MomentiError("Status must be draft or published", 400)
+            invitation.status = status_value
 
         # Node checks the patch's slug only (assertSlugAvailable(id, patch)).
         if "slug" in patch and patch.get("slug") is not None:
@@ -611,7 +671,7 @@ class InvitationDetail(APIView):
         return self._update(request, invitation_id)
 
     def delete(self, request, invitation_id):
-        invitation = _get_invitation_or_404(invitation_id)
+        invitation = _get_owned_invitation_or_404(invitation_id, request.user)
         invitation.delete()
         return Response({"ok": True})
 
@@ -699,6 +759,10 @@ class RsvpListCreate(APIView):
 
         message = str(body.get("message") or "")[:1000]
 
+        if invitation.status == "draft":
+            # Drafts are hidden from guests entirely.
+            raise MomentiError("Invitation not found", 404)
+
         rsvp = Rsvp.objects.filter(invitation=invitation, email=email).first()
         updated = rsvp is not None
         if updated:
@@ -734,6 +798,8 @@ class RsvpListCreate(APIView):
         invitation, error = _rsvp_invitation_from_params(request.query_params)
         if error is not None:
             raise error
+        if invitation.owner_id != request.user.id:
+            raise MomentiError("Invitation not found", 404)
         rsvps = Rsvp.objects.filter(invitation=invitation).order_by("-created_date")
         return Response([RsvpSerializer(rsvp).data for rsvp in rsvps])
 
@@ -757,7 +823,7 @@ class UploadView(APIView):
         """GET /api/uploads?kind=image|video|audio - the host's media library
         (auth required): previously uploaded images/videos/audio, newest first."""
         kind = str(request.query_params.get("kind") or "").strip()
-        queryset = Upload.objects.all().order_by("-created_date")
+        queryset = Upload.objects.filter(uploaded_by=request.user).order_by("-created_date")
         if kind:
             queryset = queryset.filter(kind=kind)
         return Response(
@@ -795,6 +861,7 @@ class UploadView(APIView):
         image_cap = settings.MOMENTI_KIND_LIMIT_BYTES["image"]
         if len(buffer) > image_cap:
             raise MomentiError("Image exceeds the 12 MB limit", 413)
+        enforce_storage_quota(request.user, len(buffer))
 
         try:
             name = sanitize_filename(body.get("filename"))
@@ -838,6 +905,7 @@ class StreamUploadView(APIView):
             )
         name = sanitize_filename(filename)
         limit = settings.MOMENTI_KIND_LIMIT_BYTES[kind]
+        storage_allowance = storage_allowance_bytes(request.user)
         root = _uploads_root()
         final_path = root / name
         tmp_path = root / f"{name}.part"
@@ -854,6 +922,11 @@ class StreamUploadView(APIView):
                         raise MomentiError(
                             f"File exceeds the {round(limit / 1024 / 1024)} MB limit for {kind}s",
                             413,
+                        )
+                    if storage_allowance is not None and received > storage_allowance:
+                        raise MomentiError(
+                            "Media storage quota exceeded. Free up space or upgrade your plan.",
+                            402,
                         )
                     out.write(chunk)
         except Exception:
@@ -887,6 +960,135 @@ class StreamUploadView(APIView):
             },
             status=201,
         )
+
+
+# --- Billing (SaaS Phase 2) -------------------------------------------------------
+
+
+class BillingUsageView(APIView):
+    """GET /api/billing/usage - the authenticated host's plan, usage meters and
+    active subscription (null body.subscription when on the default free plan)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(billing_payload(request.user))
+
+
+class BillingActivateView(APIView):
+    """POST /api/billing/subscription/activate - the pre-PayMongo admin toggle.
+
+    Body: {email, plan, days?}. Allowed only while MOMENTI_BILLING_MANUAL_ACTIVATION
+    is on and the caller is staff/admin. Phase 3 adds a webhook that invokes
+    grant_subscription() directly with provider='paymongo'.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not settings.MOMENTI_BILLING_MANUAL_ACTIVATION:
+            raise MomentiError("Manual activation is disabled", 403)
+        if not (request.user.is_staff or request.user.role == "admin"):
+            raise MomentiError("Admin privileges required", 403)
+        body = body_dict(request)
+        email = str(body.get("email") or "").strip().lower()
+        plan_code = str(body.get("plan") or "").strip()
+        if not email or not plan_code:
+            raise MomentiError("email and plan are required", 400)
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            raise MomentiError("User not found", 404)
+        try:
+            days = max(1, int(body.get("days") or 30))
+        except (TypeError, ValueError):
+            days = 30
+        grant_subscription(user, plan_code, period_days=days)
+        return Response(billing_payload(user))
+
+
+class BillingCancelView(APIView):
+    """POST /api/billing/subscription/cancel - stop renewal at period end."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        sub = active_subscription_for(request.user)
+        if sub is None:
+            raise MomentiError("No active subscription to cancel", 400)
+        sub.cancel_at_period_end = True
+        sub.save(update_fields=["cancel_at_period_end", "updated_date"])
+        return Response(billing_payload(request.user))
+
+
+class BillingCheckoutView(APIView):
+    """POST /api/billing/checkout - create a PayMongo-hosted Checkout Session
+    for a plan. The user pays on PayMongo's page; POST /api/billing/webhook
+    grants the subscription when it is paid."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not paymongo_configured():
+            raise MomentiError("Online billing is not configured yet", 503)
+        body = body_dict(request)
+        code = str(body.get("plan") or "").strip()
+        plan = Plan.objects.filter(code=code).first()
+        if plan is None:
+            raise MomentiError("Unknown plan", 404)
+        if plan.price_cents <= 0:
+            raise MomentiError("This plan is free - no checkout needed", 400)
+        sub = active_subscription_for(request.user)
+        if sub is not None and sub.plan_id == plan.id and sub.status == "active":
+            raise MomentiError("You are already on this plan", 400)
+        reference = f"momenti-{uuid.uuid4().hex[:16]}"
+        origin = settings.MOMENTI_PUBLIC_ORIGIN or f"{request.scheme}://{request.get_host()}"
+        session = create_checkout_session(
+            plan,
+            request.user,
+            reference,
+            f"{origin}/studio/billing?status=success",
+            f"{origin}/studio/billing?status=canceled",
+        )
+        session_data = (session.get("data") or {}).get("attributes") or {}
+        checkout_url = session_data.get("checkout_url") or ""
+        if not checkout_url:
+            raise MomentiError("PayMongo did not return a checkout URL", 502)
+        PendingCheckout.objects.create(
+            reference=reference,
+            user=request.user,
+            plan=plan,
+            provider_ref=str((session.get("data") or {}).get("id") or ""),
+            period_days=billing_period_days(plan.billing_period),
+        )
+        return Response(
+            {"checkout_url": checkout_url, "reference": reference, "plan": code}
+        )
+
+
+class BillingWebhookView(APIView):
+    """POST /api/billing/webhook - PayMongo event delivery. Not bearer-auth'd:
+    authenticity comes from the Paymongo-Signature header (HMAC-SHA256)."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        raw = request.body or b""
+        header = (
+            request.headers.get("Paymongo-Signature")
+            or request.headers.get("paymongo-signature")
+            or ""
+        )
+        ok, reason = verify_webhook_signature(raw, header)
+        if not ok:
+            raise MomentiError(reason or "Invalid webhook signature", 400)
+        try:
+            payload = json.loads(raw.decode("utf-8") or "{}")
+        except (ValueError, UnicodeDecodeError):
+            raise MomentiError("Malformed webhook payload", 400)
+        handle_webhook_event(payload)
+        return Response({"ok": True})
 
 
 # --- Media / SPA hosting ----------------------------------------------------------

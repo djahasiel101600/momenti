@@ -33,6 +33,7 @@ class InvitationSerializer(serializers.Serializer):
         record = dict(instance.data or {})
         record["id"] = str(instance.pk)
         record["owner_email"] = instance.owner_email or ""
+        record["status"] = instance.status or "published"
         record["created_date"] = iso_z(instance.created_date)
         record["updated_date"] = iso_z(instance.updated_date)
         return record

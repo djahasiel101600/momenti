@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { base44 } from "@/api/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Image } from "@/components/ui/image";
-import { Plus, Pencil, Trash2, ExternalLink, ClipboardList, Upload, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, ExternalLink, ClipboardList, Upload, Download, CreditCard } from "lucide-react";
 import { templateDefaults, templateName } from "@/lib/templates";
 import { exportInvitation, parseInvitationImport } from "@/lib/invitationTransfer";
 import TemplatePicker from "@/components/studio/TemplatePicker";
@@ -139,6 +139,12 @@ export default function Studio() {
                 >
                   <Upload size={14} /> Import
                 </button>
+                <Link
+                  to="/studio/billing"
+                  className="inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase border border-[#F2F0ED]/20 text-[#F2F0ED]/60 px-5 py-2.5 hover:border-[#C58A58] hover:text-[#C58A58] transition-colors"
+                >
+                  <CreditCard size={14} /> Billing
+                </Link>
                 <button
                   onClick={() => setView("pick")}
                   className="inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase bg-[#C58A58] text-[#0A0A0A] px-5 py-2.5 hover:bg-[#d89a68] transition-colors"

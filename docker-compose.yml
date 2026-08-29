@@ -16,6 +16,9 @@ services:
     restart: unless-stopped
     networks:
       - jdp-network
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       MOMENTI_DEBUG: "${MOMENTI_DEBUG:-off}"                 # keep "off" in prod
       MOMENTI_DATA_DIR: /data                                # volume-mounted below
@@ -34,6 +37,13 @@ services:
       GUNICORN_WORKERS: "${GUNICORN_WORKERS:-2}"
       GUNICORN_THREADS: "${GUNICORN_THREADS:-8}"
       GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-120}"
+      # Database: SQLite by default; set MOMENTI_DB_ENGINE=postgres (and
+      # start the bundled postgres service) for the SaaS posture.
+      MOMENTI_DB_ENGINE: "${MOMENTI_DB_ENGINE:-sqlite}"
+      MOMENTI_DB_HOST: postgres
+      MOMENTI_DB_NAME: "${MOMENTI_DB_NAME:-momenti}"
+      MOMENTI_DB_USER: "${MOMENTI_DB_USER:-momenti}"
+      MOMENTI_DB_PASSWORD: "${MOMENTI_DB_PASSWORD:-momenti-change-me}"
       # Optional email delivery for verification codes / reset links. When
       # MOMENTI_EMAIL_HOST is set, mail goes out over SMTP and the dev
       # helpers disappear; leave unset to keep dev helpers:
@@ -44,6 +54,10 @@ services:
       MOMENTI_EMAIL_FROM: "${MOMENTI_EMAIL_FROM:-}"
       MOMENTI_EMAIL_USE_TLS: "${MOMENTI_EMAIL_USE_TLS:-true}"
       MOMENTI_EMAIL_USE_SSL: "${MOMENTI_EMAIL_USE_SSL:-false}"
+      # SaaS billing (Phase 2): enforce plan limits (Free = 1 invitation / 200 MB);
+      # the manual-activation admin toggle is the pre-PayMongo grant path.
+      MOMENTI_QUOTA_ENFORCEMENT: "${MOMENTI_QUOTA_ENFORCEMENT:-on}"
+      MOMENTI_BILLING_MANUAL_ACTIVATION: "${MOMENTI_BILLING_MANUAL_ACTIVATION:-on}"
     volumes:
       - ./server/data:/data
     # The tunnel is the only ingress — no host ports. Uncomment to poke at it
@@ -56,6 +70,26 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${MOMENTI_DB_NAME:-momenti}"
+      POSTGRES_USER: "${MOMENTI_DB_USER:-momenti}"
+      POSTGRES_PASSWORD: "${MOMENTI_DB_PASSWORD:-momenti-change-me}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - jdp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MOMENTI_DB_USER:-momenti} -d ${MOMENTI_DB_NAME:-momenti}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
 
 networks:
   jdp-network:

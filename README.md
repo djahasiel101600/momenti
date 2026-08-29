@@ -151,6 +151,30 @@ All optional:
 - `MOMENTI_BACKEND` — set `node` to restore the embedded Node API in `npm run dev`
 - `MOMENTI_DJANGO_ORIGIN` — proxy target for `npm run dev` (default `http://127.0.0.1:8000`)
 - `MOMENTI_PORT`, `MOMENTI_DIST_DIR` (Node) — legacy standalone-server knobs
+- `MOMENTI_QUOTA_ENFORCEMENT` — `off` disables plan limits entirely (default `on`)
+- `MOMENTI_BILLING_MANUAL_ACTIVATION` — `off` disables the manual admin
+  activation endpoint once PayMongo is wired (default `on`)
+
+## Billing & quotas (SaaS Phase 2)
+
+- Plans (`core.models.Plan`) and per-user entitlements (`Subscription`) are
+  **provider-agnostic**: `Subscription.provider` is `"manual"` until the
+  PayMongo checkout/webhook path lands (Phase 3), and `provider_ref` holds the
+  provider's reference when it does. Swapping providers never touches the model.
+- Seeded tiers (data migration `0005`, editable in `/admin/`):
+  - **Free** — 1 invitation, 200 MB media, momenti branding
+  - **Pro** — 10 invitations, 5 GB media, no branding (₱499.00/month — tune in admin)
+- **Quota enforcement** (when `MOMENTI_QUOTA_ENFORCEMENT=on`): exceeding the
+  invitation cap or media storage cap returns `402 {error: "..."}` from the
+  invitation-create and both upload endpoints.
+- **API**:
+  - `GET /api/billing/usage` (auth) — `{plan, usage:{invitations, invitations_max,
+    storage_bytes, storage_max_bytes}, subscription}` for the Studio meters UI.
+  - `POST /api/billing/subscription/activate` (staff/admin, only with
+    `MOMENTI_BILLING_MANUAL_ACTIVATION=on`) — body `{email, plan, days?}`; the
+    pre-PayMongo admin toggle.
+  - `POST /api/billing/subscription/cancel` (auth) — marks `cancel_at_period_end`.
+- The legacy Node backend does **not** enforce quotas (Django is the SaaS backend).
 
 ## Data & Auth Model (Django)
 

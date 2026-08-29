@@ -6,13 +6,20 @@ uniqueness and auth guards, both upload endpoints, the uploads traversal
 guard, and the password-reset flow.
 """
 import hashlib
+import hmac
+import json
 import tempfile
 import time
 import uuid
+from unittest import mock
 from pathlib import Path
 
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
+
+from core.auth import issue_token
+import core.paymongo as paymongo_mod
+from core.models import PendingCheckout, Plan, User
 
 PNG_DATA_URL = (
     "data:image/png;base64,"
@@ -27,6 +34,7 @@ EMAIL_TEST_SETTINGS = {
 }
 
 @override_settings(MEDIA_ROOT=Path(tempfile.mkdtemp(prefix="momenti-test-media-")))
+@override_settings(MOMENTI_QUOTA_ENFORCEMENT=False)
 class MomentiApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -178,14 +186,61 @@ class MomentiApiTests(TestCase):
         )
         self.assertEqual(rec_b.status_code, 201)
 
-        listing = self.client.get("/api/entities/invitations?sort=-created_date&limit=10")
+        listing = self.client.get("/api/entities/invitations?sort=-created_date&limit=10", **headers)
         self.assertEqual(listing.status_code, 200)
         self.assertEqual(listing.json()[0]["slug"], "beta-gala")
         self.assertEqual(len(listing.json()), 2)
 
-        filtered = self.client.get("/api/entities/invitations?slug=beta-gala")
-        self.assertEqual(len(filtered.json()), 1)
-        self.assertEqual(filtered.json()[0]["slug"], "beta-gala")
+        # Anonymous list without a slug is now 401 (tenancy): the public page
+        # always filters by slug, which we cover below.
+        anon_list = self.client.get("/api/entities/invitations?sort=-created_date")
+        self.assertEqual(anon_list.status_code, 401)
+
+        # Public read by slug works for published invitations (guest lookups).
+        public_slug = self.client.get("/api/entities/invitations?slug=beta-gala")
+        self.assertEqual(public_slug.status_code, 200)
+        self.assertEqual(len(public_slug.json()), 1)
+        self.assertEqual(public_slug.json()[0]["slug"], "beta-gala")
+
+        # Tenancy isolation: a second user cannot see the first user's studio
+        # listing, nor read/update/delete their invitations by id (404).
+        other = self._register_and_verify(email="other@test.dev")["access_token"]
+        other_h = self._auth_header(other)
+        cross_list = self.client.get("/api/entities/invitations?sort=-created_date", **other_h)
+        self.assertEqual(cross_list.status_code, 200)
+        self.assertEqual(len(cross_list.json()), 0)
+
+        cross_get = self.client.get(f"/api/entities/invitations/{rec_b.json()['id']}", **other_h)
+        self.assertEqual(cross_get.status_code, 404)
+        cross_patch = self.client.patch(
+            f"/api/entities/invitations/{rec_b.json()['id']}", {"couple": "Hijack"}, format="json", **other_h
+        )
+        self.assertEqual(cross_patch.status_code, 404)
+        cross_del = self.client.delete(f"/api/entities/invitations/{rec_b.json()['id']}", **other_h)
+        self.assertEqual(cross_del.status_code, 404)
+
+        # Drafts are hidden from guests (public slug read 404, RSVP blocked).
+        self.client.patch(
+            f"/api/entities/invitations/{rec_b.json()['id']}",
+            {"status": "draft"},
+            format="json",
+            **headers,
+        )
+        guest_draft = self.client.get("/api/entities/invitations?slug=beta-gala")
+        self.assertEqual(len(guest_draft.json()), 0)
+        rsvp_draft = self.client.post(
+            "/api/rsvps",
+            {"slug": "beta-gala", "name": "X", "email": "x@x.dev", "attending": True},
+            format="json",
+        )
+        self.assertEqual(rsvp_draft.status_code, 404)
+        # back to published for the rest of the test
+        self.client.patch(
+            f"/api/entities/invitations/{rec_b.json()['id']}",
+            {"status": "published"},
+            format="json",
+            **headers,
+        )
 
         dupe = self.client.post(
             "/api/entities/invitations",
@@ -208,7 +263,7 @@ class MomentiApiTests(TestCase):
         deleted = self.client.delete(f"/api/entities/invitations/{rec_b.json()['id']}", **headers)
         self.assertEqual(deleted.status_code, 200)
         self.assertTrue(deleted.json()["ok"])
-        remaining = self.client.get("/api/entities/invitations?sort=-created_date")
+        remaining = self.client.get("/api/entities/invitations?sort=-created_date", **headers)
         self.assertEqual(len(remaining.json()), 1)
 
         # PUT/PATCH/DELETE on the collection are 405 (after auth), like Node.
@@ -229,7 +284,7 @@ class MomentiApiTests(TestCase):
             else:
                 resp = getattr(self.client, method)(path, **headers)
             self.assertEqual(resp.status_code, 404)
-        garbage = self.client.get("/api/entities/invitations/not-a-uuid")
+        garbage = self.client.get("/api/entities/invitations/not-a-uuid", **headers)
         self.assertEqual(garbage.status_code, 404)
 
     def test_flat_record_roundtrip_and_array_filter_fallback(self):
@@ -261,15 +316,19 @@ class MomentiApiTests(TestCase):
         fetched = self.client.get("/api/entities/invitations?slug=media-invite")
         self.assertEqual(fetched.json()[0]["theme"]["displayFont"], "serif")
 
+        # studio-owned listing sees it too
+        owner_list = self.client.get("/api/entities/invitations?slug=media-invite", **headers)
+        self.assertEqual(len(owner_list.json()), 1)
+
         # Primitive-array membership via the Node-parity fallback path: the
         # ORM exact-match finds nothing (tags is a list), so the verifier
         # replicates Node's String(element) === value scan.
-        by_tag = self.client.get("/api/entities/invitations?tags=outdoor")
+        by_tag = self.client.get("/api/entities/invitations?tags=outdoor", **headers)
         self.assertEqual(len(by_tag.json()), 1)
         self.assertEqual(by_tag.json()[0]["slug"], "media-invite")
 
         # Arrays of objects never string-match in Node ("[object Object]").
-        by_gallery = self.client.get("/api/entities/invitations?gallery=/uploads/clip.mp4")
+        by_gallery = self.client.get("/api/entities/invitations?gallery=/uploads/clip.mp4", **headers)
         self.assertEqual(len(by_gallery.json()), 0)
 
     # --- uploads -----------------------------------------------------------------
@@ -639,4 +698,340 @@ class MomentiApiTests(TestCase):
 
         # anonymous denied
         self.assertEqual(self.client.get("/api/uploads").status_code, 401)
+
+@override_settings(
+    MEDIA_ROOT=Path(tempfile.mkdtemp(prefix="momenti-test-media-billing-")),
+    MOMENTI_QUOTA_ENFORCEMENT=True,
+    MOMENTI_BILLING_MANUAL_ACTIVATION=True,
+)
+class BillingQuotaTests(TestCase):
+    """SaaS Phase 2: plan caps, manual admin activation, usage meters, cancel."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def _register(self, email="quota@test.dev"):
+        reg = self.client.post(
+            "/api/auth/register", {"email": email, "password": "secret123"}, format="json"
+        )
+        otp = reg.json()["dev_otp"]
+        ver = self.client.post(
+            "/api/auth/verify-otp", {"email": email, "otpCode": otp}, format="json"
+        )
+        return ver.json()["access_token"]
+
+    def _auth(self, token):
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def _admin_token(self, email="billing-admin@test.dev"):
+        user = User.objects.create_superuser(email=email, password="secret123")
+        return issue_token(user)
+
+    def test_free_plan_caps_invitations(self):
+        token = self._register()
+        h = self._auth(token)
+        first = self.client.post(
+            "/api/entities/invitations", {"slug": "only-one"}, format="json", **h
+        )
+        self.assertEqual(first.status_code, 201)
+        second = self.client.post(
+            "/api/entities/invitations", {"slug": "second"}, format="json", **h
+        )
+        self.assertEqual(second.status_code, 402)
+        self.assertIn("limit", second.json()["error"])
+
+    def test_usage_payload_default_free(self):
+        token = self._register()
+        resp = self.client.get("/api/billing/usage", **self._auth(token))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["plan"]["code"], "free")
+        self.assertEqual(body["usage"]["invitations_max"], 1)
+        self.assertEqual(body["subscription"], None)
+
+    def test_manual_activation_requires_admin_and_grants_pro(self):
+        token = self._register()
+        denied = self.client.post(
+            "/api/billing/subscription/activate",
+            {"email": "quota@test.dev", "plan": "pro"},
+            format="json",
+            **self._auth(token),
+        )
+        self.assertEqual(denied.status_code, 403)
+
+        ok = self.client.post(
+            "/api/billing/subscription/activate",
+            {"email": "quota@test.dev", "plan": "pro"},
+            format="json",
+            **self._auth(self._admin_token("billing-admin-grant@test.dev")),
+        )
+        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(ok.json()["plan"]["code"], "pro")
+        self.assertEqual(ok.json()["subscription"]["status"], "active")
+
+        h = self._auth(token)
+        self.assertEqual(
+            self.client.post("/api/entities/invitations", {"slug": "a"}, format="json", **h).status_code,
+            201,
+        )
+        self.assertEqual(
+            self.client.post("/api/entities/invitations", {"slug": "b"}, format="json", **h).status_code,
+            201,
+        )
+    def test_storage_quota_enforced_on_uploads(self):
+        token = self._register()
+        h = self._auth(token)
+        # A 1 MB plan makes the storage cap trivial to hit.
+        Plan.objects.create(
+            code="micro", name="Micro", price_cents=0, max_invitations=100, max_storage_mb=1
+        )
+        self.client.post(
+            "/api/billing/subscription/activate",
+            {"email": "quota@test.dev", "plan": "micro"},
+            format="json",
+            **self._auth(self._admin_token("billing-admin-micro@test.dev")),
+        )
+        small = self.client.put(
+            "/api/uploads/stream?filename=s.mp3",
+            data=MP3_BYTES,
+            content_type="audio/mpeg",
+            **h,
+        )
+        self.assertEqual(small.status_code, 201)
+        over = self.client.put(
+            "/api/uploads/stream?filename=big.mp3",
+            data=b"x" * (2 * 1024 * 1024),
+            content_type="audio/mpeg",
+            **h,
+        )
+        self.assertEqual(over.status_code, 402)
+        self.assertIn("quota", over.json()["error"].lower())
+
+    def test_cancel_marks_period_end(self):
+        token = self._register()
+        self.client.post(
+            "/api/billing/subscription/activate",
+            {"email": "quota@test.dev", "plan": "pro"},
+            format="json",
+            **self._auth(self._admin_token("billing-admin-cancel@test.dev")),
+        )
+        cancel = self.client.post(
+            "/api/billing/subscription/cancel", {}, format="json", **self._auth(token)
+        )
+        self.assertEqual(cancel.status_code, 200)
+        self.assertTrue(cancel.json()["subscription"]["cancel_at_period_end"])
+
+    def test_manual_activation_disabled_flag(self):
+        with override_settings(MOMENTI_BILLING_MANUAL_ACTIVATION=False):
+            resp = self.client.post(
+                "/api/billing/subscription/activate",
+                {"email": "quota@test.dev", "plan": "pro"},
+                format="json",
+                **self._auth(self._admin_token("billing-admin-off@test.dev")),
+            )
+            self.assertEqual(resp.status_code, 403)
+
+def _paymongo_sign(body_bytes, secret):
+    """Sign a webhook payload exactly as PayMongo does (test helper)."""
+    ts = str(int(time.time()))
+    sig = hmac.new(
+        secret.encode("utf-8"), (ts + ".").encode("ascii") + bytes(body_bytes), hashlib.sha256
+    ).hexdigest()
+    return f"{ts}.{sig}"
+
+
+def _paid_event(reference):
+    return {
+        "data": {
+            "id": "evt_test",
+            "type": "event",
+            "attributes": {
+                "type": "checkout_session.payment.paid",
+                "livemode": False,
+                "data": {
+                    "id": "cs_test_123",
+                    "type": "checkout_session",
+                    "attributes": {"reference_number": reference, "status": "paid"},
+                },
+            },
+        }
+    }
+
+
+@override_settings(
+    MEDIA_ROOT=Path(tempfile.mkdtemp(prefix="momenti-test-media-pm-")),
+    MOMENTI_PAYMONGO_SECRET_KEY="sk_test_dummy",
+    MOMENTI_PAYMONGO_WEBHOOK_SECRET="whsec_test",
+)
+class PayMongoApiTests(TestCase):
+    """SaaS Phase 3: checkout session creation + signed webhook handling."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def _register(self, email="pm@test.dev"):
+        reg = self.client.post(
+            "/api/auth/register", {"email": email, "password": "secret123"}, format="json"
+        )
+        otp = reg.json()["dev_otp"]
+        ver = self.client.post(
+            "/api/auth/verify-otp", {"email": email, "otpCode": otp}, format="json"
+        )
+        return ver.json()["access_token"]
+
+    def _auth(self, token):
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def test_checkout_creates_session_and_pending(self):
+        token = self._register()
+        h = self._auth(token)
+
+        def _fake_session(method, path, payload=None, timeout=10):
+            ref = payload["data"]["attributes"]["reference_number"]
+            return {
+                "data": {
+                    "id": "cs_test_abc",
+                    "type": "checkout_session",
+                    "attributes": {
+                        "checkout_url": "https://checkout.paymongo.com/cs_test_abc",
+                        "status": "active",
+                        "reference_number": ref,
+                    },
+                }
+            }
+
+        with mock.patch.object(paymongo_mod, "paymongo_request", side_effect=_fake_session):
+            resp = self.client.post("/api/billing/checkout", {"plan": "pro"}, format="json", **h)
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["checkout_url"], "https://checkout.paymongo.com/cs_test_abc")
+        self.assertTrue(body["reference"].startswith("momenti-"))
+        from core.models import User
+
+        pending = PendingCheckout.objects.filter(user=User.objects.get(email="pm@test.dev")).first()
+        self.assertIsNotNone(pending)
+        self.assertEqual(pending.plan.code, "pro")
+        self.assertEqual(pending.status, "pending")
+
+    def test_checkout_unconfigured_is_503(self):
+        token = self._register()
+        with override_settings(MOMENTI_PAYMONGO_SECRET_KEY=""):
+            resp = self.client.post(
+                "/api/billing/checkout", {"plan": "pro"}, format="json", **self._auth(token)
+            )
+        self.assertEqual(resp.status_code, 503)
+
+    def test_checkout_already_on_plan(self):
+        token = self._register()
+        from core.auth import issue_token
+
+        admin = User.objects.create_superuser(email="pm-admin@test.dev", password="x")
+        self.client.post(
+            "/api/billing/subscription/activate",
+            {"email": "pm@test.dev", "plan": "pro"},
+            format="json",
+            **self._auth(issue_token(admin)),
+        )
+        resp = self.client.post(
+            "/api/billing/checkout", {"plan": "pro"}, format="json", **self._auth(token)
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_webhook_rejects_bad_signature(self):
+        resp = self.client.post(
+            "/api/billing/webhook",
+            data=_paid_event("momenti-none"),
+            content_type="application/json",
+            HTTP_PAYMONGO_SIGNATURE="1.deadbeef",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Signature", resp.json()["error"])
+
+    def test_webhook_paid_grants_subscription_and_is_idempotent(self):
+        from core.models import User
+
+        token = self._register()
+        user = User.objects.get(email="pm@test.dev")
+        pending = PendingCheckout.objects.create(
+            reference="momenti-test-1",
+            user=user,
+            plan=Plan.objects.get(code="pro"),
+            period_days=30,
+        )
+        body = json.dumps(_paid_event(pending.reference)).encode("utf-8")
+        sig = _paymongo_sign(body, "whsec_test")
+
+        resp = self.client.post(
+            "/api/billing/webhook",
+            data=body,
+            content_type="application/json",
+            HTTP_PAYMONGO_SIGNATURE=sig,
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, "paid")
+
+        usage = self.client.get("/api/billing/usage", **self._auth(token))
+        self.assertEqual(usage.json()["plan"]["code"], "pro")
+        sub = usage.json()["subscription"]
+        self.assertEqual(sub["provider"], "paymongo")
+        self.assertEqual(sub["provider_ref"], "cs_test_123")
+
+        # Retry: idempotent, still 200, no change.
+        retry = self.client.post(
+            "/api/billing/webhook",
+            data=body,
+            content_type="application/json",
+            HTTP_PAYMONGO_SIGNATURE=sig,
+        )
+        self.assertEqual(retry.status_code, 200)
+        again = self.client.get("/api/billing/usage", **self._auth(token))
+        self.assertEqual(again.json()["subscription"]["provider_ref"], "cs_test_123")
+
+    def test_webhook_unknown_reference_acknowledges(self):
+        body = json.dumps(_paid_event("momenti-does-not-exist")).encode("utf-8")
+        sig = _paymongo_sign(body, "whsec_test")
+        resp = self.client.post(
+            "/api/billing/webhook",
+            data=body,
+            content_type="application/json",
+            HTTP_PAYMONGO_SIGNATURE=sig,
+        )
+        # PayMongo retries on non-2xx — an unknown reference must still ack.
+        self.assertEqual(resp.status_code, 200)
+
+    def test_webhook_payment_failed_marks_pending(self):
+        self._register()
+        from core.models import User
+
+        user = User.objects.get(email="pm@test.dev")
+        PendingCheckout.objects.create(
+            reference="momenti-fail-1", user=user, plan=Plan.objects.get(code="pro")
+        )
+        event = {
+            "data": {
+                "id": "evt_fail",
+                "type": "event",
+                "attributes": {
+                    "type": "payment.failed",
+                    "data": {
+                        "id": "pay_1",
+                        "type": "payment",
+                        "attributes": {"reference_number": "momenti-fail-1"},
+                    },
+                },
+            }
+        }
+        body = json.dumps(event).encode("utf-8")
+        sig = _paymongo_sign(body, "whsec_test")
+        resp = self.client.post(
+            "/api/billing/webhook",
+            data=body,
+            content_type="application/json",
+            HTTP_PAYMONGO_SIGNATURE=sig,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            PendingCheckout.objects.get(reference="momenti-fail-1").status, "failed"
+        )
 

@@ -223,6 +223,24 @@ const rsvpEntity = {
   },
 };
 
+/** SaaS billing: usage/plan meters, PayMongo checkout, renewal cancel. */
+const billingEntity = {
+  /** GET /api/billing/usage -> { plan, plans, usage, subscription, billing } */
+  usage() {
+    return request("/billing/usage", { auth: true });
+  },
+
+  /** POST /api/billing/checkout {plan} -> { checkout_url, reference } */
+  async checkout(plan) {
+    return request("/billing/checkout", { method: "POST", body: { plan }, auth: true });
+  },
+
+  /** POST /api/billing/subscription/cancel -> { subscription: {cancel_at_period_end} } */
+  cancel() {
+    return request("/billing/subscription/cancel", { method: "POST", auth: true });
+  },
+};
+
 /** The host's media library: previously uploaded images/videos/audio. */
 const uploadEntity = {
   /** list({ kind: "image" | "video" | "audio" }?) -> [{name,kind,size,url,...}], newest first */
@@ -305,6 +323,7 @@ export const api = {
     getToken,
     clearToken,
   },
+  billing: billingEntity,
   entities: {
     Invitation: invitationEntity,
     Rsvp: rsvpEntity,
