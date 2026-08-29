@@ -305,6 +305,47 @@ async function uploadFile({ file }) {
   return { file_url: result.file_url || result.url };
 }
 
+// --- Analytics (privacy-light view tracking) --------------------------------------
+// Public track call — guests pinging this is how we count views. Auth is not
+// required; the backend anonymizes the viewer via a salted IP hash.
+async function trackView(slug) {
+  if (!slug) return { ok: false };
+  const res = await request(
+    "/analytics/track",
+    { method: "POST", body: { slug }, auth: false },
+  );
+  return res || { ok: true };
+}
+
+// Host-only: fetch the daily view series for one invitation.
+async function fetchAnalytics(invitationId, days = 30) {
+  return request(`/analytics/views?invitation=${encodeURIComponent(invitationId)}&days=${days}`, {
+    auth: true,
+  });
+}
+
+// --- Template gallery --------------------------------------------------------
+async function listTemplates(source) {
+  const qs = source ? `?source=${encodeURIComponent(source)}` : "";
+  return request(`/templates${qs}`, { auth: false });
+}
+
+async function getTemplate(slug) {
+  return request(`/templates/${encodeURIComponent(slug)}`, { auth: false });
+}
+
+async function publishTemplate({ name, tagline, payload }) {
+  return request("/templates/publish", {
+    method: "POST",
+    body: { name, tagline, payload },
+    auth: true,
+  });
+}
+
+const templateEntity = { list: listTemplates, get: getTemplate, publish: publishTemplate };
+
+const analyticsEntity = { track: trackView, fetch: fetchAnalytics };
+
 // --- Public surface (same shape the Base44 SDK exposed) -------------------------
 
 export const api = {
@@ -324,6 +365,8 @@ export const api = {
     clearToken,
   },
   billing: billingEntity,
+  analytics: analyticsEntity,
+  templates: templateEntity,
   entities: {
     Invitation: invitationEntity,
     Rsvp: rsvpEntity,

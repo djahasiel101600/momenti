@@ -1,6 +1,11 @@
 import React from "react";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function AuthLayout({ icon: Icon, title, subtitle, footer, children }) {
+  const { appPublicSettings } = useAuth();
+  const termsUrl = appPublicSettings?.terms_url;
+  const privacyUrl = appPublicSettings?.privacy_url;
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
@@ -16,6 +21,19 @@ export default function AuthLayout({ icon: Icon, title, subtitle, footer, childr
         </div>
         {footer && (
           <p className="text-center text-sm text-muted-foreground mt-6">{footer}</p>
+        )}
+        {termsUrl && privacyUrl && (
+          <p className="text-center text-xs text-muted-foreground mt-4">
+            By continuing you agree to our{" "}
+            <a href={termsUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+              Terms
+            </a>{" "}
+            and{" "}
+            <a href={privacyUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+              Privacy Policy
+            </a>
+            .
+          </p>
         )}
       </div>
     </div>

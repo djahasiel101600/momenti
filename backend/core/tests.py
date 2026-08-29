@@ -19,7 +19,7 @@ from rest_framework.test import APIClient
 
 from core.auth import issue_token
 import core.paymongo as paymongo_mod
-from core.models import PendingCheckout, Plan, User
+from core.models import Invitation, PendingCheckout, Plan, Template, User
 
 PNG_DATA_URL = (
     "data:image/png;base64,"
@@ -33,10 +33,38 @@ EMAIL_TEST_SETTINGS = {
     "MOMENTI_DEV_HELPERS": False,
 }
 
+_TEST_THROTTLES = {
+    "REST_FRAMEWORK": {
+        "DEFAULT_AUTHENTICATION_CLASSES": ["core.auth.BearerAuthentication"],
+        "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+        "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+        "DEFAULT_PARSER_CLASSES": ["core.parsers.MomentiJSONParser"],
+        "EXCEPTION_HANDLER": "core.exceptions.momenti_exception_handler",
+        "DEFAULT_THROTTLE_CLASSES": [
+            "rest_framework.throttling.AnonRateThrottle",
+            "rest_framework.throttling.UserRateThrottle",
+        ],
+        # Keep throttling installed (so tests exercise that code path) but
+        # with a ceiling high enough that the suite never trips a 429.
+        "DEFAULT_THROTTLE_RATES": {
+            "anon": "10000/hour",
+            "user": "10000/hour",
+            "otp": "10000/hour",
+            "rsvp": "10000/hour",
+        },
+    },
+}
+
 @override_settings(MEDIA_ROOT=Path(tempfile.mkdtemp(prefix="momenti-test-media-")))
 @override_settings(MOMENTI_QUOTA_ENFORCEMENT=False)
+@override_settings(**_TEST_THROTTLES)
 class MomentiApiTests(TestCase):
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        # Reset DRF's cached throttle classes per-view.
+        from rest_framework.views import APIView
+        APIView.throttle_classes = []
         self.client = APIClient()
 
     def _auth_header(self, token):
@@ -699,15 +727,249 @@ class MomentiApiTests(TestCase):
         # anonymous denied
         self.assertEqual(self.client.get("/api/uploads").status_code, 401)
 
+class ThrottlingConfigTests(TestCase):
+    """Verify the throttle wiring on public endpoints (our code, not DRF's).
+
+    DRF owns the actual rate-limiting math; our job is to confirm the views
+    declare the right scopes and the settings expose the right rates.
+    """
+
+    def test_public_views_have_throttle_scopes(self):
+        from core.views import (
+            LoginView,
+            RegisterView,
+            ResendOtpView,
+            ResetPasswordRequestView,
+            RsvpListCreate,
+            VerifyOtpView,
+        )
+
+        self.assertEqual(getattr(RegisterView, "throttle_scope", None), "otp")
+        self.assertEqual(getattr(VerifyOtpView, "throttle_scope", None), "otp")
+        self.assertEqual(getattr(ResendOtpView, "throttle_scope", None), "otp")
+        self.assertEqual(getattr(ResetPasswordRequestView, "throttle_scope", None), "otp")
+        self.assertEqual(getattr(LoginView, "throttle_scope", None), "login")
+        self.assertEqual(getattr(RsvpListCreate, "throttle_scope", None), "rsvp")
+
+    def test_throttle_rates_configured(self):
+        from django.conf import settings
+
+        rates = settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
+        self.assertIn("otp", rates)
+        self.assertIn("login", rates)
+        self.assertIn("rsvp", rates)
+        self.assertIn("anon", rates)
+
+    def test_legal_urls_exposed_in_settings(self):
+        from django.conf import settings
+
+        # Defaults are empty (optional); the SPA hides the links when blank.
+        self.assertEqual(settings.MOMENTI_TERMS_URL, "")
+        self.assertEqual(settings.MOMENTI_PRIVACY_URL, "")
+
+    def test_app_settings_endpoint_exposes_legal_urls(self):
+        resp = self.client.get("/api/app/settings")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("terms_url", data)
+        self.assertIn("privacy_url", data)
+
+
+@override_settings(MEDIA_ROOT=Path(tempfile.mkdtemp(prefix="momenti-test-media-analytics-")))
+class AnalyticsTests(TestCase):
+    """Phase 5: view tracking + daily dashboard series."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        # Reset DRF's cached throttle classes per-view.
+        from rest_framework.views import APIView
+        APIView.throttle_classes = []
+        self.client = APIClient()
+        self.owner = User.objects.create(email="host@test.dev", email_verified=True, role="member")
+        self.owner.set_password("secret123")
+        self.owner.save()
+        self.token = issue_token(self.owner)
+        self.invitation = Invitation.objects.create(
+            slug="analytics-test",
+            status="published",
+            data={"couple": "A & B"},
+            owner=self.owner,
+            owner_email=self.owner.email,
+        )
+
+    def _auth(self):
+        return {"HTTP_AUTHORIZATION": f"Bearer {self.token}"}
+
+    def test_track_requires_published_invitation(self):
+        draft = Invitation.objects.create(
+            slug="draft-test",
+            status="draft",
+            data={"couple": "X & Y"},
+            owner=self.owner,
+            owner_email=self.owner.email,
+        )
+        resp = self.client.post("/api/analytics/track", {"slug": draft.slug}, format="json")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_track_records_view(self):
+        resp = self.client.post("/api/analytics/track", {"slug": "analytics-test"}, format="json")
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertTrue(resp.json().get("created"))
+
+    def test_track_idempotent_per_day(self):
+        self.client.post("/api/analytics/track", {"slug": "analytics-test"}, format="json")
+        resp = self.client.post("/api/analytics/track", {"slug": "analytics-test"}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json().get("created"))
+
+    def test_analytics_dashboard_requires_auth(self):
+        resp = self.client.get(f"/api/analytics/views?invitation={self.invitation.pk}")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_analytics_dashboard_returns_series(self):
+        # Seed a view first.
+        self.client.post("/api/analytics/track", {"slug": "analytics-test"}, format="json")
+        resp = self.client.get(
+            f"/api/analytics/views?invitation={self.invitation.pk}&days=7",
+            **self._auth(),
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertEqual(data["slug"], "analytics-test")
+        self.assertEqual(data["days"], 7)
+        self.assertGreaterEqual(data["total_views"], 1)
+        self.assertEqual(len(data["series"]), 7)
+
+    def test_analytics_dashboard_forbidden_for_other_user(self):
+        other = User.objects.create(email="intruder@test.dev", email_verified=True, role="member")
+        other.set_password("secret123")
+        other.save()
+        other_token = issue_token(other)
+        resp = self.client.get(
+            f"/api/analytics/views?invitation={self.invitation.pk}",
+            HTTP_AUTHORIZATION=f"Bearer {other_token}",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+
+
+@override_settings(
+    MEDIA_ROOT=Path(tempfile.mkdtemp(prefix="momenti-test-media-templates-")),
+    **_TEST_THROTTLES,
+)
+class TemplateGalleryTests(TestCase):
+    """Template gallery: public browsing, auth'd publishing, unique slugs."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        # Reset DRF's cached throttle classes per-view.
+        from rest_framework.views import APIView
+        APIView.throttle_classes = []
+        self.client = APIClient()
+        self.host = User.objects.create(email="designer@test.dev", email_verified=True, role="member")
+        self.host.set_password("secret123")
+        self.host.save()
+        self.token = issue_token(self.host)
+
+    def _auth(self):
+        return {"HTTP_AUTHORIZATION": f"Bearer {self.token}"}
+
+    def test_list_is_public_and_seeded(self):
+        resp = self.client.get("/api/templates")
+        self.assertEqual(resp.status_code, 200)
+        slugs = [t["slug"] for t in resp.json()["templates"]]
+        self.assertIn("wedding", slugs)
+        self.assertIn("birthday", slugs)
+        self.assertIn("gala", slugs)
+
+    def test_list_filter_by_source(self):
+        resp = self.client.get("/api/templates?source=built-in")
+        self.assertEqual(resp.status_code, 200)
+        sources = {t["source"] for t in resp.json()["templates"]}
+        self.assertEqual(sources, {"built-in"})
+
+    def test_detail_returns_payload(self):
+        resp = self.client.get("/api/templates/wedding")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["slug"], "wedding")
+        self.assertIn("couple", body["payload"])
+
+    def test_detail_404_for_unknown_slug(self):
+        resp = self.client.get("/api/templates/nope")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_publish_requires_auth(self):
+        resp = self.client.post(
+            "/api/templates/publish",
+            {"name": "Debut", "payload": {"couple": "Ana"}},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 401)
+
+    def test_publish_creates_community_template(self):
+        resp = self.client.post(
+            "/api/templates/publish",
+            {
+                "name": "Debut Glow",
+                "tagline": "Eighteen roses",
+                "payload": {"couple": "Ana", "accentColor": "#C58A58", "sections": []},
+            },
+            format="json",
+            **self._auth(),
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.json()["source"], "community")
+        slug = resp.json()["slug"]
+        # Identity fields must be stripped from the stored payload.
+        tpl = Template.objects.get(slug=slug)
+        self.assertNotIn("slug", tpl.payload)
+        self.assertNotIn("title", tpl.payload)
+        self.assertEqual(tpl.payload["couple"], "Ana")
+
+    def test_publish_slug_collision_gets_suffix(self):
+        body = {"name": "Debut Glow", "payload": {"couple": "Ana"}}
+        first = self.client.post("/api/templates/publish", body, format="json", **self._auth())
+        second = self.client.post("/api/templates/publish", body, format="json", **self._auth())
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 201)
+        self.assertNotEqual(first.json()["slug"], second.json()["slug"])
+
+    def test_publish_rejects_bad_payload(self):
+        resp = self.client.post(
+            "/api/templates/publish",
+            {"name": "Broken", "payload": {"foo": "bar"}},
+            format="json",
+            **self._auth(),
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_publish_requires_name(self):
+        resp = self.client.post(
+            "/api/templates/publish",
+            {"payload": {"couple": "Ana"}},
+            format="json",
+            **self._auth(),
+        )
+        self.assertEqual(resp.status_code, 400)
+
+
 @override_settings(
     MEDIA_ROOT=Path(tempfile.mkdtemp(prefix="momenti-test-media-billing-")),
     MOMENTI_QUOTA_ENFORCEMENT=True,
     MOMENTI_BILLING_MANUAL_ACTIVATION=True,
+    **_TEST_THROTTLES,
 )
 class BillingQuotaTests(TestCase):
     """SaaS Phase 2: plan caps, manual admin activation, usage meters, cancel."""
 
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        from rest_framework.views import APIView
+        APIView.throttle_classes = []
         self.client = APIClient()
 
     def _register(self, email="quota@test.dev"):
@@ -862,11 +1124,16 @@ def _paid_event(reference):
     MEDIA_ROOT=Path(tempfile.mkdtemp(prefix="momenti-test-media-pm-")),
     MOMENTI_PAYMONGO_SECRET_KEY="sk_test_dummy",
     MOMENTI_PAYMONGO_WEBHOOK_SECRET="whsec_test",
+    **_TEST_THROTTLES,
 )
 class PayMongoApiTests(TestCase):
     """SaaS Phase 3: checkout session creation + signed webhook handling."""
 
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        from rest_framework.views import APIView
+        APIView.throttle_classes = []
         self.client = APIClient()
 
     def _register(self, email="pm@test.dev"):

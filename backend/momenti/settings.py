@@ -164,6 +164,21 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["core.parsers.MomentiJSONParser"],
     "EXCEPTION_HANDLER": "core.exceptions.momenti_exception_handler",
+    # Public endpoints (register / resend-otp / reset-password / rsvp) are
+    # throttled per-IP to blunt email-bombing and RSVP spam. Anonymous for
+    # unauthenticated callers, scoped for the authenticated ones.
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.ScopedRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": os.environ.get("MOMENTI_THROTTLE_ANON", "20/minute"),
+        "user": os.environ.get("MOMENTI_THROTTLE_USER", "60/minute"),
+        "otp": os.environ.get("MOMENTI_THROTTLE_OTP", "5/minute"),
+        "rsvp": os.environ.get("MOMENTI_THROTTLE_RSVP", "10/minute"),
+        "login": os.environ.get("MOMENTI_THROTTLE_LOGIN", "10/minute"),
+    },
 }
 
 # --- momenti domain knobs (parity with server/api.mjs) ------------------------
@@ -224,6 +239,13 @@ if MOMENTI_EMAIL_HOST:
     DEFAULT_FROM_EMAIL = os.environ.get("MOMENTI_EMAIL_FROM", "").strip() or f"momenti <no-reply@{MOMENTI_EMAIL_HOST}>"
 else:
     EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+# --- Legal pages ------------------------------------------------------------------------
+# Optional absolute URLs. When set, the SPA footer and auth pages link to them.
+# When blank, those links hide themselves — safe for a self-hosted single-user
+# install that doesn't need legal pages.
+MOMENTI_TERMS_URL = os.environ.get("MOMENTI_TERMS_URL", "").strip()
+MOMENTI_PRIVACY_URL = os.environ.get("MOMENTI_PRIVACY_URL", "").strip()
 
 # --- i18n / tz / static / media ------------------------------------------------
 LANGUAGE_CODE = "en-us"

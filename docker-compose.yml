@@ -58,6 +58,16 @@ services:
       # the manual-activation admin toggle is the pre-PayMongo grant path.
       MOMENTI_QUOTA_ENFORCEMENT: "${MOMENTI_QUOTA_ENFORCEMENT:-on}"
       MOMENTI_BILLING_MANUAL_ACTIVATION: "${MOMENTI_BILLING_MANUAL_ACTIVATION:-on}"
+      # Per-IP throttling for public endpoints (register/login/otp/reset/rsvp).
+      # Adjust for traffic; the defaults blunt email-bombing and RSVP spam.
+      MOMENTI_THROTTLE_ANON: "${MOMENTI_THROTTLE_ANON:-20/minute}"
+      MOMENTI_THROTTLE_USER: "${MOMENTI_THROTTLE_USER:-60/minute}"
+      MOMENTI_THROTTLE_LOGIN: "${MOMENTI_THROTTLE_LOGIN:-10/minute}"
+      MOMENTI_THROTTLE_OTP: "${MOMENTI_THROTTLE_OTP:-5/minute}"
+      MOMENTI_THROTTLE_RSVP: "${MOMENTI_THROTTLE_RSVP:-10/minute}"
+      # Optional legal page URLs (blank = links hide in the SPA footer).
+      MOMENTI_TERMS_URL: "${MOMENTI_TERMS_URL:-}"
+      MOMENTI_PRIVACY_URL: "${MOMENTI_PRIVACY_URL:-}"
     volumes:
       - ./server/data:/data
     # The tunnel is the only ingress — no host ports. Uncomment to poke at it

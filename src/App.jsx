@@ -14,6 +14,8 @@ import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import RsvpDashboard from '@/pages/RsvpDashboard';
 import Billing from '@/pages/Billing';
+import InvitationAnalytics from '@/pages/InvitationAnalytics';
+import TemplateGallery from '@/pages/TemplateGallery';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Navigate } from 'react-router-dom';
 // Add page imports here
@@ -66,6 +68,8 @@ const AuthenticatedApp = () => {
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route path="/studio" element={<Studio />} />
         <Route path="/studio/rsvps/:id" element={<RsvpDashboard />} />
+        <Route path="/studio/analytics/:id" element={<InvitationAnalytics />} />
+        <Route path="/studio/templates" element={<TemplateGallery />} />
         <Route path="/studio/billing" element={<Billing />} />
       </Route>
       <Route path="/:client" element={<Invitation />} />

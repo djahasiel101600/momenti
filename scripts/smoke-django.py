@@ -45,20 +45,7 @@ def check(label, actual, expected):
     print(f"{'PASS' if ok else 'FAIL'}  {label}" + ("" if ok else f"  (got {actual!r}, want {expected!r})"))
 
 
-def request(pathname, method="GET", body=None, token=None, raw_body=None, content_type="application/json", extra_headers=None):
-    """Returns (status, parsed-json-or-None, headers)."""
-    headers = {}
-    data = None
-    if body is not None:
-        data = json.dumps(body).encode("utf-8")
-        headers["Content-Type"] = "application/json"
-    if raw_body is not None:
-        data = raw_body
-        headers["Content-Type"] = content_type
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    if extra_headers:
-        headers.update(extra_headers)
+def _do_request(pathname, method, data, headers):
     req = urllib.request.Request(BASE + pathname, data=data, method=method, headers=headers)
     try:
         resp = urllib.request.urlopen(req)
@@ -72,6 +59,27 @@ def request(pathname, method="GET", body=None, token=None, raw_body=None, conten
         except ValueError:
             parsed = None
     return resp.status, parsed, dict(resp.headers)
+
+
+def request(pathname, method="GET", body=None, token=None, raw_body=None, content_type="application/json", extra_headers=None):
+    """Returns (status, parsed-json-or-None, headers). Retries once on 429 throttle."""
+    headers = {}
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    if raw_body is not None:
+        data = raw_body
+        headers["Content-Type"] = content_type
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    if extra_headers:
+        headers.update(extra_headers)
+    status, parsed, hdrs = _do_request(pathname, method, data, headers)
+    if status == 429:
+        time.sleep(2.0)
+        status, parsed, hdrs = _do_request(pathname, method, data, headers)
+    return status, parsed, hdrs
 
 
 def wait_healthy(deadline=45.0):
@@ -99,6 +107,12 @@ def main():
     env["MOMENTI_PAYMONGO_SECRET_KEY"] = "sk_test_smoke_dummy"
     env["MOMENTI_PAYMONGO_WEBHOOK_SECRET"] = "whsec_smoke"
     env["MOMENTI_PAYMONGO_MODE"] = "test"
+    # Relaxed throttle rates so the rapid smoke-test sequence doesn't trip them.
+    env["MOMENTI_THROTTLE_ANON"] = "1000/minute"
+    env["MOMENTI_THROTTLE_USER"] = "1000/minute"
+    env["MOMENTI_THROTTLE_OTP"] = "1000/minute"
+    env["MOMENTI_THROTTLE_RSVP"] = "1000/minute"
+    env["MOMENTI_THROTTLE_LOGIN"] = "1000/minute"
     python = venv_python()
     manage_py = str(REPO_ROOT / "backend" / "manage.py")
     # Fresh data dir: apply migrations first (the Node backend creates its

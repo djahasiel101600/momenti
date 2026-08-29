@@ -25,6 +25,7 @@ from urllib.parse import urlsplit
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
+from django.db import models
 from django.http import FileResponse, Http404, HttpResponse
 from django.utils import timezone
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -35,6 +36,7 @@ from .auth import issue_token
 from .errors import MomentiError
 from .models import (
     Invitation,
+    InvitationView,
     OtpCode,
     PendingCheckout,
     PendingPasswordReset,
@@ -42,6 +44,7 @@ from .models import (
     Plan,
     Rsvp,
     Subscription,
+    Template,
     Upload,
     User,
 )
@@ -70,6 +73,14 @@ from .uploads import (
 )
 
 log = logging.getLogger("momenti")
+
+
+def slugify(s):
+    """URL-safe slug from arbitrary text (mirrors src/lib/templates.js)."""
+    return (
+        re.sub(r"[^a-z0-9]+", "-", re.sub(r"&", "and", str(s or "").lower()))
+        .strip("-")
+    )
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
@@ -217,6 +228,8 @@ class AppSettingsView(APIView):
             {
                 "id": "local",
                 "public_settings": {"app_name": "momenti.co", "auth_mode": "password"},
+                "terms_url": settings.MOMENTI_TERMS_URL,
+                "privacy_url": settings.MOMENTI_PRIVACY_URL,
             }
         )
 
@@ -226,6 +239,7 @@ class AppSettingsView(APIView):
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    throttle_scope = "otp"
 
     def post(self, request):
         body = body_dict(request)
@@ -250,6 +264,7 @@ class RegisterView(APIView):
 
 class VerifyOtpView(APIView):
     permission_classes = [AllowAny]
+    throttle_scope = "otp"
 
     def post(self, request):
         body = body_dict(request)
@@ -285,6 +300,7 @@ class VerifyOtpView(APIView):
 
 class ResendOtpView(APIView):
     permission_classes = [AllowAny]
+    throttle_scope = "otp"
 
     def post(self, request):
         email = require_email(body_dict(request))
@@ -294,6 +310,7 @@ class ResendOtpView(APIView):
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
+    throttle_scope = "login"
 
     def post(self, request):
         body = body_dict(request)
@@ -326,6 +343,7 @@ class LogoutView(APIView):
 
 class ResetPasswordRequestView(APIView):
     permission_classes = [AllowAny]
+    throttle_scope = "otp"
 
     def post(self, request):
         email = require_email(body_dict(request))
@@ -717,6 +735,8 @@ class RsvpListCreate(APIView):
     """POST /api/rsvps — guests reply publicly (upsert per invitee email);
     GET /api/rsvps?invitation=<id>|slug=<slug> — the host's guest ledger."""
 
+    throttle_scope = "rsvp"
+
     def get_permissions(self):
         if self.request.method == "GET":
             return [IsAuthenticated()]
@@ -802,6 +822,107 @@ class RsvpListCreate(APIView):
             raise MomentiError("Invitation not found", 404)
         rsvps = Rsvp.objects.filter(invitation=invitation).order_by("-created_date")
         return Response([RsvpSerializer(rsvp).data for rsvp in rsvps])
+
+
+# --- Analytics ------------------------------------------------------------------
+# Privacy-light invitation view tracking. No fingerprint, no user-agent stored.
+# A per-(invitation, day, viewer_hash) bucket counts unique guests per day
+# without letting hosts de-anonymize visitors.
+
+
+def _viewer_hash(request):
+    """Best-effort anonymous bucket key. Combines a truncated client IP with
+    a per-install salt so the hash can't be reversed to identify a guest."""
+    salt = getattr(settings, "MOMENTI_ANALYTICS_SALT", settings.SECRET_KEY)
+    ip = request.META.get("REMOTE_ADDR", "")
+    # X-Forwarded-For (cloudflared terminates the client connection).
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        ip = forwarded.split(",")[0].strip() or ip
+    raw = f"{salt}:{ip}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+class InvitationViewTrackView(APIView):
+    """POST /api/analytics/track — record a page view (public; guests only).
+    Body: { slug: "<slug>" }. Throttled as an on-write."""
+
+    permission_classes = [AllowAny]
+    throttle_scope = "rsvp"
+
+    def post(self, request):
+        body = body_dict(request)
+        slug = str(body.get("slug") or "").strip()
+        if not slug:
+            raise MomentiError("A slug is required", 400)
+        invitation = Invitation.objects.filter(slug=slug, status="published").first()
+        if invitation is None:
+            raise MomentiError("Invitation not found", 404)
+
+        viewer = _viewer_hash(request)
+        today = timezone.now().date()
+
+        # Upsert: one bucket per (invitation, day, viewer). The created flag
+        # tells the client whether this was a fresh view (handy for dedup).
+        obj, created = InvitationView.objects.get_or_create(
+            invitation=invitation,
+            viewer_hash=viewer,
+            day=today,
+        )
+        return Response({"ok": True, "created": created}, status=201 if created else 200)
+
+
+class InvitationAnalyticsView(APIView):
+    """GET /api/analytics/views?invitation=<id>&days=30 — daily view totals +
+    unique-guest counts for the host's invitation (auth required)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        invitation_id = str(request.query_params.get("invitation") or "").strip()
+        if not invitation_id:
+            raise MomentiError("Pass ?invitation=<id>", 400)
+        invitation = _get_owned_invitation_or_404(invitation_id, request.user)
+
+        try:
+            days = min(365, max(1, int(request.query_params.get("days", 30))))
+        except (TypeError, ValueError):
+            days = 30
+
+        today = timezone.now().date()
+        start = today - timezone.timedelta(days=days - 1)
+
+        rows = (
+            InvitationView.objects.filter(
+                invitation=invitation,
+                day__gte=start,
+            )
+            .values("day")
+            .annotate(
+                views=models.Count("id"),
+                unique_guests=models.Count("viewer_hash", distinct=True),
+            )
+            .order_by("day")
+        )
+
+        by_date = {r["day"]: {"views": r["views"], "unique_guests": r["unique_guests"]} for r in rows}
+        series = []
+        total_views = 0
+        for offset in range(days):
+            day = start + timezone.timedelta(days=offset)
+            bucket = by_date.get(day, {"views": 0, "unique_guests": 0})
+            series.append({"date": day.isoformat(), **bucket})
+            total_views += bucket["views"]
+
+        return Response(
+            {
+                "invitation": str(invitation.pk),
+                "slug": invitation.slug,
+                "days": days,
+                "total_views": total_views,
+                "series": series,
+            }
+        )
 
 
 # --- Uploads --------------------------------------------------------------------
@@ -1089,6 +1210,130 @@ class BillingWebhookView(APIView):
             raise MomentiError("Malformed webhook payload", 400)
         handle_webhook_event(payload)
         return Response({"ok": True})
+
+
+# --- Template gallery -------------------------------------------------------------
+
+
+class TemplateListView(APIView):
+    """GET /api/templates — list all available templates (public).
+
+    Returns built-in + community templates. No auth required — the gallery
+    is browsable by anyone. Each item is a lightweight summary; the full
+    payload is fetched on demand via GET /api/templates/<slug>.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        source = request.query_params.get("source")
+        qs = Template.objects.all()
+        if source in ("built-in", "community"):
+            qs = qs.filter(source=source)
+        items = [
+            {
+                "slug": t.slug,
+                "name": t.name,
+                "tagline": t.tagline,
+                "source": t.source,
+                "accentColor": t.accent_color,
+                "backgroundColor": t.background_color,
+                "cover": t.cover,
+                "author": t.author.email if t.author else None,
+                "createdDate": t.created_date.isoformat(),
+            }
+            for t in qs
+        ]
+        return Response({"templates": items})
+
+
+class TemplateDetailView(APIView):
+    """GET /api/templates/<slug> — full template payload for import (public).
+
+    The returned `payload` is the flat invitation object ready to feed into
+    the editor. Identity fields are already stripped at publish time.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, slug):
+        try:
+            template = Template.objects.get(slug=slug)
+        except Template.DoesNotExist:
+            raise MomentiError("Template not found", 404)
+        return Response(
+            {
+                "slug": template.slug,
+                "name": template.name,
+                "tagline": template.tagline,
+                "source": template.source,
+                "accentColor": template.accent_color,
+                "backgroundColor": template.background_color,
+                "cover": template.cover,
+                "payload": template.payload,
+            }
+        )
+
+
+class TemplatePublishView(APIView):
+    """POST /api/templates — publish a design as a community template (auth).
+
+    Body: { name, tagline?, payload } — the payload is a flat invitation
+    object (same shape the editor produces). Identity fields are stripped
+    server-side so the template is ownerless and importable by anyone.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        body = request.data or {}
+        name = str(body.get("name") or "").strip()
+        if not name:
+            raise MomentiError("name is required", 400)
+        payload = body.get("payload")
+        if not payload or not isinstance(payload, dict):
+            raise MomentiError("payload is required", 400)
+        if not payload.get("couple") and not payload.get("sections"):
+            raise MomentiError("payload does not look like an invitation", 400)
+
+        # Strip identity fields — templates are ownerless.
+        RESERVED = {"id", "owner_email", "created_date", "updated_date", "slug", "title"}
+        clean = {k: v for k, v in payload.items() if k not in RESERVED}
+
+        base = slugify(str(name)) or "template"
+        taken = set(
+            Template.objects.filter(slug__startswith=base).values_list("slug", flat=True)
+        )
+        slug = base
+        n = 2
+        while slug in taken:
+            slug = f"{base}-{n}"
+            n += 1
+
+        tagline = str(body.get("tagline") or "").strip()[:160]
+        accent = str(payload.get("accentColor") or "")[:16]
+        bg = str(payload.get("backgroundColor") or "")[:16]
+        cover = str(payload.get("heroImage") or payload.get("cover") or "")[:255]
+
+        template = Template.objects.create(
+            slug=slug,
+            name=name[:120],
+            tagline=tagline,
+            source="community",
+            accent_color=accent,
+            background_color=bg,
+            cover=cover,
+            payload=clean,
+            author=request.user,
+        )
+        return Response(
+            {
+                "slug": template.slug,
+                "name": template.name,
+                "source": template.source,
+            },
+            status=201,
+        )
 
 
 # --- Media / SPA hosting ----------------------------------------------------------

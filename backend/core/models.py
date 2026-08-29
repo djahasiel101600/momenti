@@ -163,6 +163,28 @@ class Upload(models.Model):
         return self.name
 
 
+
+class InvitationView(models.Model):
+    """One row per invitation page view. Privacy-light: no fingerprint, no
+    user-agent storage. A coarse per-day, per-ip bucket keeps hosts from
+    accidentally identifying guests while still giving useful trend data."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    invitation = models.ForeignKey(
+        Invitation, on_delete=models.CASCADE, related_name="views"
+    )
+    viewer_hash = models.CharField(max_length=64, db_index=True)
+    day = models.DateField(db_index=True)
+    created_date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["invitation", "day"])]
+        ordering = ["-created_date"]
+
+    def __str__(self):
+        return f"view:{self.invitation_id}:{self.day}"
+
+
 class Plan(models.Model):
     """A billable tier. Price is in PHP centavos (0 = free); `None` limits mean
     unlimited. Feature flags drive Studio affordances (hide_branding will gate
@@ -239,3 +261,43 @@ class PendingCheckout(models.Model):
 
     def __str__(self):
         return f"{self.reference} ({self.status})"
+
+
+class Template(models.Model):
+    """A shareable invitation design that any host can browse and import.
+
+    `payload` is the flat invitation object (same shape the editor and API
+    exchange) — identity fields are stripped on publish so importing always
+    creates a fresh invitation owned by the importer. Built-in templates
+    (wedding/birthday/gala) are seeded with ``source='built-in'``; designs
+    shared by hosts use ``source='community'``.
+    """
+
+    SOURCE_CHOICES = [
+        ("built-in", "Built-in"),
+        ("community", "Community"),
+    ]
+
+    slug = models.CharField(max_length=120, unique=True)
+    name = models.CharField(max_length=120)
+    tagline = models.CharField(max_length=160, blank=True, default="")
+    source = models.CharField(max_length=12, choices=SOURCE_CHOICES, default="community")
+    accent_color = models.CharField(max_length=16, blank=True, default="")
+    background_color = models.CharField(max_length=16, blank=True, default="")
+    cover = models.CharField(max_length=255, blank=True, default="")
+    payload = models.JSONField(default=dict)
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="shared_templates",
+    )
+    created_date = models.DateTimeField(auto_now_add=True)
+    updated_date = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["source", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.source})"

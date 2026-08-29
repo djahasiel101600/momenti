@@ -1,8 +1,14 @@
 import { motion } from "framer-motion";
+import { useAuth } from "@/lib/AuthContext";
 
 const socials = ["Instagram", "Pinterest", "Behance", "LinkedIn"];
 
 export default function Footer() {
+  const { appPublicSettings } = useAuth();
+  const termsUrl = appPublicSettings?.terms_url;
+  const privacyUrl = appPublicSettings?.privacy_url;
+  const hasLegal = Boolean(termsUrl || privacyUrl);
+
   return (
     <footer id="contact" className="bg-[#0A0A0A] text-[#F2F0ED] pt-28 pb-12 px-6 lg:px-16 border-t border-white/5">
       <div className="mx-auto max-w-[1400px]">
@@ -60,10 +66,20 @@ export default function Footer() {
           <p className="text-xs tracking-wide">
             © {new Date().getFullYear()} momenti.co — Digital Invitations that Move You.
           </p>
-          <div className="flex gap-6 text-xs">
-            <a href="#" className="hover:text-[#F2F0ED] transition-colors">Privacy</a>
-            <a href="#" className="hover:text-[#F2F0ED] transition-colors">Terms</a>
-          </div>
+          {hasLegal && (
+            <div className="flex gap-6 text-xs">
+              {privacyUrl ? (
+                <a href={privacyUrl} target="_blank" rel="noopener noreferrer" className="hover:text-[#F2F0ED] transition-colors">Privacy</a>
+              ) : (
+                <span className="opacity-30">Privacy</span>
+              )}
+              {termsUrl ? (
+                <a href={termsUrl} target="_blank" rel="noopener noreferrer" className="hover:text-[#F2F0ED] transition-colors">Terms</a>
+              ) : (
+                <span className="opacity-30">Terms</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </footer>

@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     Invitation,
+    InvitationView,
     OtpCode,
     PendingPasswordReset,
     PendingRegistration,
@@ -45,6 +46,14 @@ class PendingCheckoutAdmin(admin.ModelAdmin):
     list_display = ("reference", "user", "plan", "status", "created_date")
     search_fields = ("reference", "user__email")
     list_filter = ("status", "plan")
+
+
+@admin.register(InvitationView)
+class InvitationViewAdmin(admin.ModelAdmin):
+    list_display = ("invitation", "viewer_hash", "day", "created_date")
+    list_filter = ("day",)
+    search_fields = ("invitation__slug", "invitation__owner_email")
+    readonly_fields = ("created_date",)
 
 
 admin.site.register([OtpCode, PendingRegistration, PendingPasswordReset, Upload])

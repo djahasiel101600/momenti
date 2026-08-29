@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { base44 } from "@/api/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Image } from "@/components/ui/image";
-import { Plus, Pencil, Trash2, ExternalLink, ClipboardList, Upload, Download, CreditCard } from "lucide-react";
+import { Plus, Pencil, Trash2, ExternalLink, ClipboardList, Upload, Download, CreditCard, BarChart3, LayoutGrid } from "lucide-react";
 import { templateDefaults, templateName } from "@/lib/templates";
 import { exportInvitation, parseInvitationImport } from "@/lib/invitationTransfer";
 import TemplatePicker from "@/components/studio/TemplatePicker";
@@ -174,12 +174,20 @@ export default function Studio() {
             <div className="text-center py-24 border border-dashed border-white/15 rounded-sm">
               <p className="font-serif-display text-3xl text-[#F2F0ED]/80">No invitations yet</p>
               <p className="mt-3 text-sm text-[#F2F0ED]/40">Pick a template to craft your first one.</p>
-              <button
-                onClick={() => setView("pick")}
-                className="mt-8 inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase bg-[#C58A58] text-[#0A0A0A] px-6 py-3 hover:bg-[#d89a68] transition-colors"
-              >
-                <Plus size={14} /> New invitation
-              </button>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <button
+                  onClick={() => setView("pick")}
+                  className="inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase bg-[#C58A58] text-[#0A0A0A] px-6 py-3 hover:bg-[#d89a68] transition-colors"
+                >
+                  <Plus size={14} /> New invitation
+                </button>
+                <Link
+                  to="/studio/templates"
+                  className="inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase border border-white/20 text-[#F2F0ED]/70 px-6 py-3 hover:border-white/40 hover:text-[#F2F0ED] transition-colors"
+                >
+                  <LayoutGrid size={14} /> Browse gallery
+                </Link>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -222,6 +230,12 @@ export default function Studio() {
                         className="inline-flex items-center gap-1.5 text-[10px] tracking-luxe-sm uppercase text-[#F2F0ED]/60 hover:text-[#C58A58] transition-colors"
                       >
                         <ClipboardList size={12} /> RSVPs
+                      </Link>
+                      <Link
+                        to={`/studio/analytics/${it.id}`}
+                        className="inline-flex items-center gap-1.5 text-[10px] tracking-luxe-sm uppercase text-[#F2F0ED]/60 hover:text-[#C58A58] transition-colors"
+                      >
+                        <BarChart3 size={12} /> Views
                       </Link>
                       <button
                         onClick={() => handleExport(it)}

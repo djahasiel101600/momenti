@@ -40,6 +40,12 @@ export default function Invitation() {
         setLoading(false);
         return;
       }
+      // Privacy-light view tracking. Only counts views of real, published
+      // invitations (the endpoint 404s on drafts). Sample/slug-less pages are
+      // skipped. Failures are silent — analytics must never break the page.
+      if (record && record.status === "published") {
+        base44.analytics.track(record.slug || client).catch(() => {});
+      }
       const t = setTimeout(() => alive && setLoading(false), 2500);
       return () => clearTimeout(t);
     })();
