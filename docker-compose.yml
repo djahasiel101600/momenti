@@ -78,7 +78,6 @@ services:
       # (scannable QR Ph code rendered on the Billing page itself).
       MOMENTI_PAYMONGO_FLOW: "${MOMENTI_PAYMONGO_FLOW:-hosted}"
       # Per-IP throttling for public endpoints (register/login/otp/reset/rsvp).
-      # Per-IP throttling for public endpoints (register/login/otp/reset/rsvp).
       # Adjust for traffic; the defaults blunt email-bombing and RSVP spam.
       MOMENTI_THROTTLE_ANON: "${MOMENTI_THROTTLE_ANON:-20/minute}"
       MOMENTI_THROTTLE_USER: "${MOMENTI_THROTTLE_USER:-60/minute}"
@@ -95,10 +94,12 @@ services:
       MOMENTI_BUSINESS_LOCATIONS: "${MOMENTI_BUSINESS_LOCATIONS:-}"
       MOMENTI_BUSINESS_SOCIALS: "${MOMENTI_BUSINESS_SOCIALS:-}"
       MOMENTI_HERO_SAMPLE_LINK: "${MOMENTI_HERO_SAMPLE_LINK:-}"
-    MOMENTI_BRAND_ACCENT_COLOR: "${MOMENTI_BRAND_ACCENT_COLOR:-}"
-    MOMENTI_BRAND_ACCENT_HOVER_COLOR: "${MOMENTI_BRAND_ACCENT_HOVER_COLOR:-}"
-    MOMENTI_BRAND_FAVICON_URL: "${MOMENTI_BRAND_FAVICON_URL:-}"
-    MOMENTI_BRAND_LOGO_URL: "${MOMENTI_BRAND_LOGO_URL:-}"
+      # White-label branding: env values are the defaults; the Admin console's
+      # White-label tab stores DB overrides on top of these (migration 0011).
+      MOMENTI_BRAND_ACCENT_COLOR: "${MOMENTI_BRAND_ACCENT_COLOR:-}"
+      MOMENTI_BRAND_ACCENT_HOVER_COLOR: "${MOMENTI_BRAND_ACCENT_HOVER_COLOR:-}"
+      MOMENTI_BRAND_LOGO_URL: "${MOMENTI_BRAND_LOGO_URL:-}"
+      MOMENTI_BRAND_FAVICON_URL: "${MOMENTI_BRAND_FAVICON_URL:-}"
     volumes:
       - ./server/data:/data
     # The tunnel is the only ingress — no host ports. Uncomment to poke at it
