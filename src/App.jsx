@@ -16,6 +16,7 @@ import RsvpDashboard from '@/pages/RsvpDashboard';
 import Billing from '@/pages/Billing';
 import InvitationAnalytics from '@/pages/InvitationAnalytics';
 import TemplateGallery from '@/pages/TemplateGallery';
+import Admin from '@/pages/Admin';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Navigate } from 'react-router-dom';
 // Add page imports here
@@ -71,6 +72,7 @@ const AuthenticatedApp = () => {
         <Route path="/studio/analytics/:id" element={<InvitationAnalytics />} />
         <Route path="/studio/templates" element={<TemplateGallery />} />
         <Route path="/studio/billing" element={<Billing />} />
+<Route path="/admin" element={<Admin />} />
       </Route>
       <Route path="/:client" element={<Invitation />} />
       <Route path="*" element={<PageNotFound />} />

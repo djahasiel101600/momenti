@@ -1721,3 +1721,122 @@ class BillingQrPhTests(TestCase):
         )
         self.assertEqual(resp.status_code, 404)
 
+
+@override_settings(**_TEST_THROTTLES)
+class AdminApiTests(TestCase):
+    """Admin API (/api/admin/*): staff/role=admin only, management, config."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        from rest_framework.views import APIView
+        APIView.throttle_classes = []
+        self.client = APIClient()
+        self.admin = User.objects.create_superuser(
+            email="rootadmin@test.dev", password="secret123"
+        )
+        self.member = User.objects.create(
+            email="member@test.dev", role="member", email_verified=True
+        )
+        self.member.set_password("secret123")
+        self.member.save()
+        self.admin_token = issue_token(self.admin)
+        self.member_token = issue_token(self.member)
+
+    def _auth(self, token):
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def test_admin_required(self):
+        # Anonymous
+        resp = self.client.get("/api/admin/overview")
+        self.assertEqual(resp.status_code, 401)
+        # Authenticated but not admin
+        resp = self.client.get("/api/admin/overview", **self._auth(self.member_token))
+        self.assertEqual(resp.status_code, 403)
+        # Admin works
+        resp = self.client.get("/api/admin/overview", **self._auth(self.admin_token))
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("counts", data)
+        self.assertIn("recent_users", data)
+        self.assertGreaterEqual(data["counts"]["users"], 2)
+
+    def test_users_list_search_and_patch(self):
+        resp = self.client.get("/api/admin/users", **self._auth(self.admin_token))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertGreaterEqual(body["total"], 2)
+        emails = [u["email"] for u in body["users"]]
+        self.assertIn("rootadmin@test.dev", emails)
+
+        # Search
+        resp = self.client.get(
+            "/api/admin/users?search=rootadmin", **self._auth(self.admin_token)
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.json()["users"]), 1)
+        self.assertEqual(resp.json()["users"][0]["email"], "rootadmin@test.dev")
+
+        # Patch: promote member to admin
+        member_id = User.objects.get(email="member@test.dev").pk
+        resp = self.client.patch(
+            f"/api/admin/users/{member_id}",
+            {"role": "admin"},
+            format="json",
+            **self._auth(self.admin_token),
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["role"], "admin")
+        self.assertEqual(resp.json()["is_staff"], True)
+
+    def test_users_patch_self_guard(self):
+        resp = self.client.patch(
+            f"/api/admin/users/{self.admin.pk}",
+            {"role": "member"},
+            format="json",
+            **self._auth(self.admin_token),
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("own admin", resp.json()["error"])
+
+    def test_database_explorer(self):
+        resp = self.client.get("/api/admin/database", **self._auth(self.admin_token))
+        self.assertEqual(resp.status_code, 200)
+        tables = {t["name"]: t for t in resp.json()["tables"]}
+        self.assertIn("core_user", tables)
+        self.assertIn("rows", tables["core_user"])
+        # There's at least one row in users
+        self.assertGreaterEqual(tables["core_user"]["rows"], 2)
+
+    def test_config_redacts_secrets(self):
+        resp = self.client.get("/api/admin/config", **self._auth(self.admin_token))
+        self.assertEqual(resp.status_code, 200)
+        cfg = resp.json()["config"]
+        self.assertIn("MOMENTI_PAYMONGO_MODE", cfg)
+        for key, value in cfg.items():
+            self.assertNotEqual(value, "sk_test_dummy")
+
+    def test_logs_endpoint_captures_lines(self):
+        import logging
+
+        from core.logging_utils import get_buffer
+
+        get_buffer()  # attach the ring buffer (apps.ready also does this)
+        mlog = logging.getLogger("momenti")
+        old_level = mlog.level
+        mlog.setLevel(logging.INFO)
+        try:
+            mlog.info("admin-log-probe-%s", "ok")
+        finally:
+            mlog.setLevel(old_level)
+        resp = self.client.get("/api/admin/logs", **self._auth(self.admin_token))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("admin-log-probe-ok", "\n".join(resp.json()["logs"]))
+
+    def test_me_exposes_is_staff_and_role(self):
+        resp = self.client.get("/api/auth/me", **self._auth(self.admin_token))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["role"], "admin")
+        self.assertIs(body["is_staff"], True)
+

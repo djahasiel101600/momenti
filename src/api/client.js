@@ -254,6 +254,47 @@ const billingEntity = {
   },
 };
 
+/** Admin console: staff-only operations (users, database, config, logs). */
+const adminEntity = {
+  /** GET /api/admin/overview -> { counts, recent_users } */
+  overview() {
+    return request("/admin/overview", { auth: true });
+  },
+
+  /** GET /api/admin/users?search=&limit= -> { users, total } */
+  users({ search, limit } = {}) {
+    const params = {};
+    if (search) params.search = search;
+    if (limit) params.limit = String(limit);
+    const qs = toQuery(params);
+    return request(`/admin/users${qs ? `?${qs}` : ""}`, { auth: true });
+  },
+
+  /** PATCH /api/admin/users/:id { role?, is_active? } -> { id, email, role, is_active, is_staff } */
+  updateUser(userId, patch) {
+    return request(`/admin/users/${encodeURIComponent(userId)}`, {
+      method: "PATCH",
+      body: patch,
+      auth: true,
+    });
+  },
+
+  /** GET /api/admin/database -> { tables: [{ name, label, rows }] } */
+  database() {
+    return request("/admin/database", { auth: true });
+  },
+
+  /** GET /api/admin/config -> { config } (secret values redacted) */
+  config() {
+    return request("/admin/config", { auth: true });
+  },
+
+  /** GET /api/admin/logs -> { logs: ["[momenti] …", …] } */
+  logs() {
+    return request("/admin/logs", { auth: true });
+  },
+};
+
 /** The host's media library: previously uploaded images/videos/audio. */
 const uploadEntity = {
   /** list({ kind: "image" | "video" | "audio" }?) -> [{name,kind,size,url,...}], newest first */
@@ -378,6 +419,7 @@ export const api = {
     clearToken,
   },
   billing: billingEntity,
+  admin: adminEntity,
   analytics: analyticsEntity,
   templates: templateEntity,
   entities: {

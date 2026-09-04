@@ -1,6 +1,6 @@
 from django.urls import path, re_path
 
-from . import views
+from . import admin_views, views
 
 urlpatterns = [
     path("api/health", views.HealthView.as_view()),
@@ -38,6 +38,13 @@ urlpatterns = [
         r"^api/templates/(?P<slug>[^/]+)$",
         views.TemplateDetailView.as_view(),
     ),
+    # Admin API (staff / role=admin only)
+    path("api/admin/overview", admin_views.AdminOverviewView.as_view()),
+    path("api/admin/users", admin_views.AdminUsersView.as_view()),
+    path("api/admin/users/<str:user_id>", admin_views.AdminUsersView.as_view()),
+    path("api/admin/database", admin_views.AdminDatabaseView.as_view()),
+    path("api/admin/config", admin_views.AdminConfigView.as_view()),
+    path("api/admin/logs", admin_views.AdminLogsView.as_view()),
     re_path(r"^uploads/(?P<rest>.+)$", views.serve_upload_media),
     re_path(r"^uploads/$", views.serve_upload_media),
     re_path(r"^uploads$", views.serve_upload_media),

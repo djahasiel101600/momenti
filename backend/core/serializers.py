@@ -18,6 +18,9 @@ class UserPublicSerializer(serializers.Serializer):
             "email": user.email,
             "full_name": user.full_name or "",
             "role": user.role or "member",
+            # Lets the frontend gate /admin on staff OR role=admin, matching
+            # the backend's AdminOnly permission exactly.
+            "is_staff": bool(user.is_staff),
         }
 
 

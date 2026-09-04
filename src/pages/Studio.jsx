@@ -3,8 +3,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Image } from "@/components/ui/image";
-import { Plus, Pencil, Trash2, ExternalLink, ClipboardList, Upload, Download, CreditCard, BarChart3, LayoutGrid } from "lucide-react";
+import { Plus, Pencil, Trash2, ExternalLink, ClipboardList, Upload, Download, CreditCard, BarChart3, LayoutGrid, ShieldCheck } from "lucide-react";
 import { templateDefaults, templateName } from "@/lib/templates";
+import { useAuth } from "@/lib/AuthContext";
 import { exportInvitation, parseInvitationImport } from "@/lib/invitationTransfer";
 import TemplatePicker from "@/components/studio/TemplatePicker";
 import InvitationEditor from "@/components/studio/InvitationEditor";
@@ -24,6 +25,8 @@ export default function Studio() {
   const [editing, setEditing] = useState(null);
   const fileInputRef = useRef(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = !!user && (user.role === "admin" || user.is_staff);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const load = async () => {
@@ -156,6 +159,14 @@ export default function Studio() {
                 >
                   <Upload size={14} /> Import
                 </button>
+                {isAdmin && (
+                  <Link
+                    to="/admin"
+                    className="inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase border border-[#F2F0ED]/20 text-[#F2F0ED]/60 px-5 py-2.5 hover:border-[#C58A58] hover:text-[#C58A58] transition-colors"
+                  >
+                    <ShieldCheck size={14} /> Admin
+                  </Link>
+                )}
                 <Link
                   to="/studio/billing"
                   className="inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase border border-[#F2F0ED]/20 text-[#F2F0ED]/60 px-5 py-2.5 hover:border-[#C58A58] hover:text-[#C58A58] transition-colors"
