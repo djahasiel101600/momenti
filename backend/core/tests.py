@@ -1958,3 +1958,39 @@ class ProfileApiTests(TestCase):
         self.assertIs(resp.json()["ok"], True)
 
 
+class MakeAdminCommandTests(TestCase):
+    """The CLI bootstrap for the /admin console: promote, create, revoke."""
+
+    def _run(self, *args):
+        import io
+
+        from django.core.management import call_command
+
+        out = io.StringIO()
+        call_command("make_admin", *args, stdout=out)
+        return out.getvalue()
+
+    def test_promotes_existing_account(self):
+        User.objects.create_user(email="promote@test.dev", password="secret123")
+        self._run("--email", "promote@test.dev")
+        user = User.objects.get(email="promote@test.dev")
+        self.assertEqual(user.role, "admin")
+        self.assertTrue(user.is_staff)
+
+    def test_creates_missing_account_with_password(self):
+        self._run("--email", "fresh-admin@test.dev", "--password", "bootstrap123")
+        user = User.objects.get(email="fresh-admin@test.dev")
+        self.assertEqual(user.role, "admin")
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.check_password("bootstrap123"))
+
+    def test_revoke_demotes_to_member(self):
+        User.objects.create_user(
+            email="demote@test.dev", password="secret123", role="admin", is_staff=True
+        )
+        self._run("--email", "demote@test.dev", "--revoke")
+        user = User.objects.get(email="demote@test.dev")
+        self.assertEqual(user.role, "member")
+        self.assertFalse(user.is_staff)
+
+
