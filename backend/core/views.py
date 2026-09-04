@@ -59,6 +59,7 @@ from .billing import (
 )
 from .paymongo import (
     create_checkout_session,
+    create_qrph_intent,
     handle_webhook_event,
     paymongo_configured,
     verify_webhook_signature,
@@ -1163,6 +1164,29 @@ class BillingCheckoutView(APIView):
         if sub is not None and sub.plan_id == plan.id and sub.status == "active":
             raise MomentiError("You are already on this plan", 400)
         reference = f"momenti-{uuid.uuid4().hex[:16]}"
+
+        if (getattr(settings, "MOMENTI_PAYMONGO_FLOW", "hosted") or "hosted").lower() == "qrph":
+            # Native QR Ph: render a scannable code on the Billing page itself
+            # (Payment Intents API) — no redirect to PayMongo's hosted page.
+            intent_id, attached = create_qrph_intent(plan, request.user, reference)
+            attached_attrs = (attached.get("data") or {}).get("attributes") or {}
+            qr_image = str(
+                ((attached_attrs.get("next_action") or {}).get("code") or {}).get("image_url")
+                or ""
+            )
+            if not qr_image:
+                raise MomentiError("PayMongo did not return a QR code", 502)
+            PendingCheckout.objects.create(
+                reference=reference,
+                user=request.user,
+                plan=plan,
+                provider_ref=intent_id,
+                period_days=billing_period_days(plan.billing_period),
+            )
+            return Response(
+                {"flow": "qrph", "qr_image": qr_image, "reference": reference, "plan": code}
+            )
+
         origin = settings.MOMENTI_PUBLIC_ORIGIN or f"{request.scheme}://{request.get_host()}"
         session = create_checkout_session(
             plan,

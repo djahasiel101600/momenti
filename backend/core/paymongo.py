@@ -112,6 +112,51 @@ def create_checkout_session(plan, user, reference, success_url, cancel_url):
     )
 
 
+def create_qrph_intent(plan, user, reference):
+    """Native QR Ph flow (SariStore-POS style): create a PaymentIntent limited
+    to "qrph", create the QR Ph payment method, attach it, and hand back the
+    Base64 QR code image so the buyer can scan it directly on our Billing
+    page — no redirect to PayMongo's hosted checkout.
+
+    Returns (payment_intent_id, attach_response). The caller stores the
+    intent id as PendingCheckout.provider_ref so the payment.paid webhook can
+    map the payment back to the plan grant."""
+    intent = paymongo_request(
+        "POST",
+        "payment_intents",
+        {
+            "data": {
+                "attributes": {
+                    "amount": plan.price_cents,
+                    "currency": "PHP",
+                    "payment_method_allowed": ["qrph"],
+                    "description": f"momenti {plan.name}",
+                    "statement_descriptor": "MOMENTI",
+                    "metadata": {"reference": reference},
+                }
+            }
+        },
+    )
+    intent_data = intent.get("data") or {}
+    intent_id = str(intent_data.get("id") or "")
+    if not intent_id:
+        raise MomentiError("PayMongo did not return a payment intent", 502)
+
+    method = paymongo_request(
+        "POST", "payment_methods", {"data": {"attributes": {"type": "qrph"}}}
+    )
+    method_id = str(((method.get("data") or {}).get("id")) or "")
+    if not method_id:
+        raise MomentiError("PayMongo did not return a payment method", 502)
+
+    attached = paymongo_request(
+        "POST",
+        f"payment_intents/{intent_id}/attach",
+        {"data": {"attributes": {"payment_method": method_id}}},
+    )
+    return intent_id, attached
+
+
 def verify_webhook_signature(raw_body, header_value):
     """Validate the Paymongo-Signature header for ``raw_body``.
 
@@ -176,13 +221,58 @@ def handle_webhook_event(body):
         log.info("PayMongo webhook: granted %s -> %s", pending.user.email, pending.plan.code)
         return {"ok": True, "granted": True}
 
+    if event_type == "payment.paid":
+        # Payment Intent flow (native QR Ph on the Billing page). The payment
+        # resource links back via payment_intent_id, which we stored as
+        # PendingCheckout.provider_ref when the QR was generated; the intent
+        # metadata reference is the fallback.
+        intent_id = str(attrs.get("payment_intent_id") or "")
+        reference = str((attrs.get("metadata") or {}).get("reference") or "")
+        pending = None
+        if intent_id:
+            pending = PendingCheckout.objects.filter(provider_ref=intent_id).first()
+        if pending is None and reference:
+            pending = PendingCheckout.objects.filter(reference=reference).first()
+        if pending is None:
+            log.warning(
+                "PayMongo webhook: payment.paid for unknown intent %r", intent_id
+            )
+            return {"ok": True, "ignored": "unknown_reference"}
+        if pending.status == "paid":
+            return {"ok": True, "ignored": "already_processed"}
+        payment_id = str(resource.get("id") or "")
+        pending.status = "paid"
+        if payment_id:
+            pending.provider_ref = payment_id
+        pending.save(update_fields=["status", "provider_ref", "updated_date"])
+        grant_subscription(
+            pending.user,
+            pending.plan.code,
+            period_days=billing_period_days(pending.plan.billing_period),
+            provider="paymongo",
+            provider_ref=payment_id or intent_id,
+        )
+        log.info(
+            "PayMongo webhook: granted %s -> %s (payment.paid)",
+            pending.user.email,
+            pending.plan.code,
+        )
+        return {"ok": True, "granted": True}
+
     if event_type in ("payment.failed", "checkout_session.payment.failed"):
         reference = str(attrs.get("reference_number") or "")
-        updated = PendingCheckout.objects.filter(reference=reference, status="pending").update(
-            status="failed"
-        )
+        intent_id = str(attrs.get("payment_intent_id") or "")
+        updated = 0
+        if reference:
+            updated = PendingCheckout.objects.filter(
+                reference=reference, status="pending"
+            ).update(status="failed")
+        elif intent_id:
+            updated = PendingCheckout.objects.filter(
+                provider_ref=intent_id, status="pending"
+            ).update(status="failed")
         if updated:
-            log.info("PayMongo webhook: marked %s failed", reference)
+            log.info("PayMongo webhook: marked %s%s failed", reference, intent_id)
         return {"ok": True, "ignored": event_type}
 
     log.info("PayMongo webhook: unhandled event %s", event_type)

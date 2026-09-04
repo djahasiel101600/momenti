@@ -74,6 +74,9 @@ services:
       # Payment methods offered at checkout. New PayMongo accounts start with
       # GCash/Maya only — drop "card" until card payments are activated.
       MOMENTI_PAYMONGO_METHODS: "${MOMENTI_PAYMONGO_METHODS:-gcash,paymaya,card}"
+      # Checkout flow: "hosted" (default — PayMongo's checkout page) or "qrph"
+      # (scannable QR Ph code rendered on the Billing page itself).
+      MOMENTI_PAYMONGO_FLOW: "${MOMENTI_PAYMONGO_FLOW:-hosted}"
       # Per-IP throttling for public endpoints (register/login/otp/reset/rsvp).
       # Per-IP throttling for public endpoints (register/login/otp/reset/rsvp).
       # Adjust for traffic; the defaults blunt email-bombing and RSVP spam.

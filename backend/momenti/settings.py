@@ -234,6 +234,13 @@ MOMENTI_PAYMONGO_BASE_URL = (
 # when set it wins over /admin edits on every boot. Leave unset to manage the
 # price via /admin only.
 MOMENTI_PRO_PRICE_CENTS = os.environ.get("MOMENTI_PRO_PRICE_CENTS", "").strip()
+# PayMongo checkout flow: "hosted" (default) sends the buyer to PayMongo's
+# checkout page (GCash / Maya / card). "qrph" renders a scannable QR Ph code
+# directly on the Billing page instead (Payment Intents API; the buyer pays
+# from any bank or e-wallet app). Requires QR Ph to be active on the account.
+MOMENTI_PAYMONGO_FLOW = (
+    os.environ.get("MOMENTI_PAYMONGO_FLOW", "hosted").strip().lower() or "hosted"
+)
 MOMENTI_BILLING_MANUAL_ACTIVATION = (
     os.environ.get("MOMENTI_BILLING_MANUAL_ACTIVATION", "").strip().lower()
     not in {"off", "false", "0", "no"}

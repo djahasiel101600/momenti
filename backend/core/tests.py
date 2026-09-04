@@ -1432,3 +1432,199 @@ class BillingPlanSyncTests(TestCase):
         # The checkout session must charge exactly the env-driven price.
         self.assertEqual(captured["amount"], 29900)
 
+
+@override_settings(
+    MOMENTI_PAYMONGO_SECRET_KEY="sk_test_dummy",
+    MOMENTI_PAYMONGO_WEBHOOK_SECRET="whsec_test",
+    MOMENTI_PAYMONGO_FLOW="qrph",
+    **_TEST_THROTTLES,
+)
+class BillingQrPhTests(TestCase):
+    """MOMENTI_PAYMONGO_FLOW=qrph: native QR Ph checkout (Payment Intents API).
+
+    The buyer gets a scannable QR code rendered on the Billing page itself —
+    no redirect to PayMongo's hosted checkout — and the plan is granted by the
+    payment.paid webhook matching the stored PaymentIntent id."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        from rest_framework.views import APIView
+        APIView.throttle_classes = []
+        self.client = APIClient()
+
+    def _register(self, email="qr@test.dev"):
+        reg = self.client.post(
+            "/api/auth/register", {"email": email, "password": "secret123"}, format="json"
+        )
+        otp = reg.json()["dev_otp"]
+        ver = self.client.post(
+            "/api/auth/verify-otp", {"email": email, "otpCode": otp}, format="json"
+        )
+        return ver.json()["access_token"]
+
+    def _auth(self, token):
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def _fake_paymongo(self, calls):
+        def _handler(method, path, payload=None, timeout=10):
+            calls.append(path)
+            if path == "payment_intents":
+                return {
+                    "data": {
+                        "id": "pi_test_1",
+                        "type": "payment_intent",
+                        "attributes": {
+                            "amount": 49900,
+                            "status": "awaiting_payment_method",
+                            "client_key": "ck_test_1",
+                        },
+                    }
+                }
+            if path == "payment_methods":
+                return {
+                    "data": {
+                        "id": "pm_test_1",
+                        "type": "payment_method",
+                        "attributes": {"type": "qrph"},
+                    }
+                }
+            if path.startswith("payment_intents/pi_test_1/attach"):
+                return {
+                    "data": {
+                        "id": "pi_test_1",
+                        "type": "payment_intent",
+                        "attributes": {
+                            "status": "awaiting_next_action",
+                            "next_action": {
+                                "code": {
+                                    "image_url": "data:image/svg+xml;base64,UVJDT0RFR0VORVJBVEVE"
+                                }
+                            },
+                        },
+                    }
+                }
+            raise AssertionError(f"unexpected PayMongo path {path!r}")
+
+        return _handler
+
+    def test_checkout_returns_scannable_qr_and_pending(self):
+        from core.models import User
+
+        token = self._register()
+        calls = []
+        with mock.patch.object(
+            paymongo_mod, "paymongo_request", side_effect=self._fake_paymongo(calls)
+        ):
+            resp = self.client.post(
+                "/api/billing/checkout", {"plan": "pro"}, format="json",
+                **{"HTTP_AUTHORIZATION": f"Bearer {token}"},
+            )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        body = resp.json()
+        self.assertEqual(body["flow"], "qrph")
+        self.assertEqual(body["qr_image"], "data:image/svg+xml;base64,UVJDT0RFR0VORVJBVEVE")
+        self.assertTrue(body["reference"].startswith("momenti-"))
+        # Intent -> method -> attach, in that order.
+        self.assertEqual(calls, ["payment_intents", "payment_methods",
+                                 "payment_intents/pi_test_1/attach"])
+        pending = PendingCheckout.objects.get(user__email="qr@test.dev")
+        self.assertEqual(pending.status, "pending")
+        self.assertEqual(pending.provider_ref, "pi_test_1")
+
+    def test_payment_paid_webhook_grants_plan(self):
+        from core.models import User
+
+        token = self._register()
+        user = User.objects.get(email="qr@test.dev")
+        pending = PendingCheckout.objects.create(
+            reference="momenti-qr-1",
+            user=user,
+            plan=Plan.objects.get(code="pro"),
+            provider_ref="pi_test_9",
+            period_days=30,
+        )
+        event = {
+            "data": {
+                "id": "evt_qr",
+                "type": "event",
+                "attributes": {
+                    "type": "payment.paid",
+                    "data": {
+                        "id": "pay_qr_9",
+                        "type": "payment",
+                        "attributes": {
+                            "amount": 49900,
+                            "currency": "PHP",
+                            "status": "paid",
+                            "payment_intent_id": "pi_test_9",
+                        },
+                    },
+                },
+            }
+        }
+        body = json.dumps(event).encode("utf-8")
+        sig = _paymongo_sign(body, "whsec_test")
+        resp = self.client.post(
+            "/api/billing/webhook",
+            data=body,
+            content_type="application/json",
+            HTTP_PAYMONGO_SIGNATURE=sig,
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, "paid")
+        usage = self.client.get("/api/billing/usage", **self._auth(token))
+        self.assertEqual(usage.json()["plan"]["code"], "pro")
+        # Retry: idempotent ack, no double grant.
+        retry = self.client.post(
+            "/api/billing/webhook",
+            data=body,
+            content_type="application/json",
+            HTTP_PAYMONGO_SIGNATURE=sig,
+        )
+        self.assertEqual(retry.status_code, 200)
+        usage_again = self.client.get("/api/billing/usage", **self._auth(token))
+        self.assertEqual(usage_again.json()["subscription"]["provider"], "paymongo")
+
+    def test_payment_failed_webhook_marks_pending(self):
+        from core.models import User
+
+        self._register()
+        user = User.objects.get(email="qr@test.dev")
+        pending = PendingCheckout.objects.create(
+            reference="momenti-qr-2",
+            user=user,
+            plan=Plan.objects.get(code="pro"),
+            provider_ref="pi_test_8",
+            period_days=30,
+        )
+        event = {
+            "data": {
+                "id": "evt_qr_fail",
+                "type": "event",
+                "attributes": {
+                    "type": "payment.failed",
+                    "data": {
+                        "id": "pay_qr_8",
+                        "type": "payment",
+                        "attributes": {
+                            "status": "failed",
+                            "payment_intent_id": "pi_test_8",
+                        },
+                    },
+                },
+            }
+        }
+        body = json.dumps(event).encode("utf-8")
+        sig = _paymongo_sign(body, "whsec_test")
+        resp = self.client.post(
+            "/api/billing/webhook",
+            data=body,
+            content_type="application/json",
+            HTTP_PAYMONGO_SIGNATURE=sig,
+        )
+        self.assertEqual(resp.status_code, 200)
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, "failed")
+

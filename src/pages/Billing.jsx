@@ -53,6 +53,7 @@ export default function Billing() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [qr, setQr] = useState(null); // { image, reference } — native QR Ph flow
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,10 +96,40 @@ export default function Billing() {
     return () => clearInterval(timer);
   }, [status, onPaidPlan]);
 
+  // Native QR Ph: poll until the payment.paid webhook flips the plan, then
+  // close the code and refresh — the buyer never leaves this page.
+  useEffect(() => {
+    if (!qr || onPaidPlan) return;
+    const timer = setInterval(async () => {
+      try {
+        const fresh = await base44.billing.usage();
+        const freshSub = fresh?.subscription;
+        if (freshSub?.status === "active" && freshSub?.plan && freshSub.plan !== "free") {
+          setData(fresh);
+          toast({
+            title: "Payment received",
+            description: "Your Pro plan is now active.",
+          });
+          setQr(null);
+        }
+      } catch {
+        /* keep polling */
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [qr, onPaidPlan]);
+
   const startCheckout = async (code) => {
     setBusy(code);
     try {
-      const { checkout_url } = await base44.billing.checkout(code);
+      const res = await base44.billing.checkout(code);
+      if (res?.flow === "qrph" && res?.qr_image) {
+        // Native QR Ph: the code renders right here — no redirect.
+        setQr({ image: res.qr_image, reference: res.reference });
+        setBusy("");
+        return;
+      }
+      const { checkout_url } = res;
       if (!checkout_url) throw new Error("PayMongo did not return a checkout URL.");
       window.location.assign(checkout_url);
     } catch (e) {
@@ -287,7 +318,7 @@ export default function Billing() {
                           >
                             <CreditCard size={13} />
                             {busy === p.code
-                              ? "Opening PayMongo…"
+                              ? "Opening checkout…"
                               : paymongo.configured
                                 ? "Upgrade"
                                 : "Coming soon"}
@@ -299,11 +330,44 @@ export default function Billing() {
                 })}
               </div>
               <p className="mt-6 text-xs text-[#F2F0ED]/30 flex items-center gap-2">
-                <FileText size={13} /> Payments are processed by PayMongo (GCash, Maya, cards). You'll be taken to their secure checkout.
+                <FileText size={13} /> Payments are processed by PayMongo. QR Ph shows a scannable
+                code right here; other methods open PayMongo's secure checkout.
               </p>
             </section>
           </div>
         )}
+
+      {qr && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-white text-[#0A0A0A] rounded-sm max-w-sm w-full p-8 text-center">
+            <p className="text-[10px] tracking-luxe uppercase text-[#0A0A0A]/50">
+              QR Ph Payment
+            </p>
+            <h3 className="font-serif-display text-2xl mt-2">Scan to pay</h3>
+            <div className="mt-6 inline-block border border-black/10 p-4 bg-white">
+              <img
+                src={qr.image.startsWith("data:") ? qr.image : `data:image/png;base64,${qr.image}`}
+                alt="QR Ph code"
+                className="w-56 h-56"
+              />
+            </div>
+            <p className="mt-4 text-xs text-[#0A0A0A]/60">
+              Scan with any bank or e-wallet app — GCash, Maya, BPI, BDO, UnionBank and more.
+              The code expires in 30 minutes.
+            </p>
+            <p className="mt-2 text-[10px] text-[#0A0A0A]/40 font-mono">{qr.reference}</p>
+            <p className="mt-4 text-xs text-[#0A0A0A]/70 flex items-center justify-center gap-2">
+              <Loader2 size={13} className="animate-spin" /> Waiting for payment…
+            </p>
+            <button
+              onClick={() => setQr(null)}
+              className="mt-6 text-[10px] tracking-luxe-sm uppercase border border-black/15 text-[#0A0A0A]/60 px-4 py-2 hover:bg-black/5"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
       </main>
     </div>
   );
