@@ -21,6 +21,10 @@ import {
   DEFAULT_HEADINGS,
   STYLE_PRESETS,
   LOOP_TRANSITIONS,
+  WIDGET_DEFS,
+  WIDGET_FIELDS,
+  WIDGET_DEFAULTS,
+  newWidgetId,
 } from "@/lib/templates";
 
 const SECTION_STYLE_KEYS = ["bgColor", "textColor", "accentColor"];
@@ -90,11 +94,25 @@ function buildForm(initial) {
     rsvpNote: i.rsvpNote || "",
     rsvpMaxGuests: String(i.rsvpMaxGuests ?? 5),
     headings: typeof i.headings === "object" && i.headings ? { ...i.headings } : {},
-    sections: sectionsIn.map((s) => ({
-      id: s.id,
-      label: typeof s.label === "string" && s.label ? s.label : SECTION_DEFAULT_EYEBROWS[s.id] || s.id,
-      visible: s.visible !== false,
-    })),
+    sections: sectionsIn.map((s) => {
+      const isWidget = typeof s.type === "string" && WIDGET_DEFS.some((w) => w.type === s.type);
+      const entry = {
+        id: s.id,
+        label: typeof s.label === "string" && s.label ? s.label : SECTION_DEFAULT_EYEBROWS[s.id] || s.id,
+        visible: s.visible !== false,
+      };
+      if (isWidget) {
+        entry.type = s.type;
+        const defaults = WIDGET_DEFAULTS[s.type] || {};
+        const rawData = s.data && typeof s.data === "object" ? s.data : {};
+        const data = {};
+        for (const key of Object.keys(defaults)) {
+          data[key] = typeof rawData[key] === "string" ? rawData[key] : defaults[key];
+        }
+        entry.data = data;
+      }
+      return entry;
+    }),
     sectionStyles: normalizeSectionStyles(i.sectionStyles),
     music: {
       url: i.music?.url || "",
@@ -128,6 +146,29 @@ export default function InvitationEditor({ initial, recordId, onSaved, onCancel 
       [arr[idx], arr[j]] = [arr[j], arr[idx]];
       return { ...f, sections: arr };
     });
+  const addWidget = (type) =>
+    setForm((f) => ({
+      ...f,
+      sections: [
+        ...f.sections,
+        {
+          id: newWidgetId(),
+          type,
+          label: "",
+          visible: true,
+          data: { ...(WIDGET_DEFAULTS[type] || {}) },
+        },
+      ],
+    }));
+  const removeSection = (id) =>
+    setForm((f) => ({ ...f, sections: f.sections.filter((s) => s.id !== id) }));
+  const patchWidgetData = (id, key, v) =>
+    setForm((f) => ({
+      ...f,
+      sections: f.sections.map((s) =>
+        s.id === id ? { ...s, data: { ...(s.data || {}), [key]: v } } : s
+      ),
+    }));
   const setMusic = (key, v) =>
     setForm((f) => ({ ...f, music: { ...f.music, [key]: v } }));
   const setSectionStyle = (id, key, v) =>
@@ -311,9 +352,19 @@ export default function InvitationEditor({ initial, recordId, onSaved, onCancel 
                             <ChevronDown size={16} />
                           </button>
                         </div>
-                        <span className="font-serif-display text-lg text-[#F2F0ED] flex-1 first-letter:uppercase">
-                          {s.id}
+                        <span className="font-serif-display text-lg text-[#F2F0ED] flex-1 first-letter:uppercase truncate">
+                          {s.type ? (WIDGET_DEFS.find((w) => w.type === s.type)?.name || s.id) : s.id}
                         </span>
+                        {s.type && (
+                          <button
+                            onClick={() => removeSection(s.id)}
+                            aria-label={`Remove ${WIDGET_DEFS.find((w) => w.type === s.type)?.name || "block"}`}
+                            title="Remove block"
+                            className="p-1.5 text-[#F2F0ED]/40 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                         <VisibilityRow checked={s.visible} onChange={(v) => patchSection(s.id, { visible: v })} />
                       </div>
                       {s.visible && (
@@ -326,7 +377,56 @@ export default function InvitationEditor({ initial, recordId, onSaved, onCancel 
                           </div>
                         </div>
                       )}
-                      {s.id !== "countdown" && s.visible && (
+                      {s.type ? (
+                        s.visible && (
+                          <>
+                            <div className="mt-4">
+                              <Field
+                                label="Kicker"
+                                value={s.label}
+                                onChange={(v) => patchSection(s.id, { label: v })}
+                                placeholder="Optional small caps above the block"
+                                hint="Shown as the small caps line above this block"
+                              />
+                            </div>
+                            {WIDGET_FIELDS[s.type] && (
+                              <div className="mt-4 pt-4 border-t border-white/5">
+                                <p className="mb-3 text-[9px] tracking-luxe-sm uppercase text-[#F2F0ED]/25">Block settings</p>
+                                {WIDGET_FIELDS[s.type].map((fld) =>
+                                  fld.kind === "textarea" ? (
+                                    <TextAreaField
+                                      key={fld.key}
+                                      label={fld.label}
+                                      rows={fld.rows || 3}
+                                      value={s.data?.[fld.key] ?? ""}
+                                      onChange={(v) => patchWidgetData(s.id, fld.key, v)}
+                                      placeholder={fld.placeholder}
+                                      hint={fld.hint}
+                                    />
+                                  ) : fld.kind === "select" ? (
+                                    <SelectField
+                                      key={fld.key}
+                                      label={fld.label}
+                                      value={s.data?.[fld.key] ?? ""}
+                                      onChange={(v) => patchWidgetData(s.id, fld.key, v)}
+                                      options={fld.options}
+                                    />
+                                  ) : (
+                                    <Field
+                                      key={fld.key}
+                                      label={fld.label}
+                                      value={s.data?.[fld.key] ?? ""}
+                                      onChange={(v) => patchWidgetData(s.id, fld.key, v)}
+                                      placeholder={fld.placeholder}
+                                      hint={fld.hint}
+                                    />
+                                  )
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )
+                      ) : s.id !== "countdown" && s.visible && (
                         <div className="mt-4">
                           <Field
                             label="Eyebrow label"
@@ -338,6 +438,26 @@ export default function InvitationEditor({ initial, recordId, onSaved, onCancel 
                         </div>
                       )}
                     </div>
+                  ))}
+                </div>
+              </section>
+
+              <section>
+                <Header>Add a block</Header>
+                <p className="mt-2 mb-6 text-xs text-[#F2F0ED]/40 max-w-md">
+                  Drop a small widget anywhere on the page — it joins the section
+                  order above so you can move, hide and restyle it like any other.
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                  {WIDGET_DEFS.map((w) => (
+                    <button
+                      key={w.type}
+                      onClick={() => addWidget(w.type)}
+                      className="border border-white/10 hover:border-[#C58A58] rounded-sm p-4 text-left transition-colors"
+                    >
+                      <span className="text-[10px] tracking-luxe-sm uppercase text-[#C58A58]">{w.name}</span>
+                      <span className="mt-2 block text-[11px] text-[#F2F0ED]/45 leading-snug">{w.desc}</span>
+                    </button>
                   ))}
                 </div>
               </section>

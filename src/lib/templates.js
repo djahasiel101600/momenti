@@ -46,6 +46,22 @@ export const TEMPLATES = [
     backgroundColor: "#0A0A0A",
     cover: "/media/900c8128a_generated_image.png",
   },
+  {
+    id: "garden",
+    name: "Garden Party",
+    tagline: "Lush · Afternoon",
+    accentColor: "#7A9E6E",
+    backgroundColor: "#0E120C",
+    cover: "/media/6b1ca96ed_generated_image.png",
+  },
+  {
+    id: "christening",
+    name: "Christening",
+    tagline: "Joyful · Family",
+    accentColor: "#A8C0D8",
+    backgroundColor: "#0C0F13",
+    cover: "/media/99b0701c8_generated_dae09813.png",
+  },
 ];
 
 // Quick-apply palettes offered by the Studio Style tab. All assume a dark
@@ -108,6 +124,48 @@ const CONTENT = {
     storyImage: "/media/f00f48add_generated_image.png",
     gallery: GALA_GALLERY,
   },
+  garden: {
+    couple: "Maya & Theo",
+    coupleShort: "M·T",
+    eventType: "Garden Party",
+    date: "2027-05-22T16:00",
+    venueName: "The Rose Conservatory",
+    venueAddress: "12 Bloomsbury Lane, San Diego, CA",
+    mapUrl: "https://maps.google.com/?q=The+Rose+Conservatory+San+Diego",
+    time: "4:00 PM",
+    dressCode: "Garden Formal",
+    story:
+      "Two families, one shared love of growing things. Join us among the hydrangeas and string lights for an afternoon of wine, warm bread and unhurried conversation — a celebration in full bloom.",
+    heroImage: "/media/6b1ca96ed_generated_image.png",
+    storyImage: "/media/83a13c58f_generated_image.png",
+    gallery: [
+      { url: "/media/83a13c58f_generated_image.png", alt: "Garden invitation card beside dried lavender", span: "wide" },
+      { url: "/media/7c03129e2_generated_image.png", alt: "Dessert table with cake and cream florals in soft light", span: "tall" },
+      { url: "/media/6d456085b_generated_image.png", alt: "Two glasses clinking in warm candlelight", span: "tall" },
+      { url: "/media/6b1ca96ed_generated_image.png", alt: "Long table with florals and string lights at dusk", span: "wide" },
+    ],
+  },
+  christening: {
+    couple: "The Dela Cruz Family",
+    coupleShort: "B·D",
+    eventType: "Christening",
+    date: "2027-03-14T10:00",
+    venueName: "St. Michael's Parish",
+    venueAddress: "1 Cathedral Plaza, Manila",
+    mapUrl: "https://maps.google.com/?q=St+Michael+Parish+Manila",
+    time: "10:00 AM",
+    dressCode: "Sunday Best",
+    story:
+      "With hearts full of gratitude, we invite you to witness the baptism of our little one. A blessing, then a celebration of family — lunch follows at the courtyard garden.",
+    heroImage: "/media/99b0701c8_generated_dae09813.png",
+    storyImage: "/media/5856fa2b7_generated_5cd6ad13.png",
+    gallery: [
+      { url: "/media/5856fa2b7_generated_5cd6ad13.png", alt: "Cream invitation card with wax seal", span: "wide" },
+      { url: "/media/582bc498b_generated_93fa3ad5.png", alt: "Soft focused keepsake on linen", span: "tall" },
+      { url: "/media/99b0701c8_generated_dae09813.png", alt: "Stone church exterior at golden hour", span: "tall" },
+      { url: "/media/acb2ce145_generated_60229421.png", alt: "Tender table detail with candles", span: "wide" },
+    ],
+  },
 };
 
 // --- Sections ------------------------------------------------------------------
@@ -140,6 +198,63 @@ export const SECTION_DEFAULT_EYEBROWS = {
   rsvp: "The Guest Ledger",
 };
 
+// --- Widgets (WordPress-lite blocks) ----------------------------------------------
+//
+// Users can drop these anywhere in the section order. Each widget is a simple
+// block with 1–3 fields; the Studio editor renders the settings surface from
+// WIDGET_FIELDS, and the public page renders WidgetComponents[type]. Stored in
+// the sections array as { id: "widget-…", type, label, visible, data }.
+
+export const WIDGET_DEFS = [
+  { type: "text", name: "Text note", desc: "A heading and paragraph — a note from the parents, a verse, instructions." },
+  { type: "quote", name: "Quote", desc: "A centered pull-quote for a reading or a toast." },
+  { type: "divider", name: "Divider", desc: "An elegant divider to separate moments." },
+  { type: "image", name: "Image", desc: "A single photo with an optional caption." },
+  { type: "button", name: "Link button", desc: "A call-to-action — gift registry, travel, RSVP link." },
+];
+export const WIDGET_TYPES = WIDGET_DEFS.map((w) => w.type);
+
+/** Field catalog per widget type; the editor's block settings render these. */
+export const WIDGET_FIELDS = {
+  text: [
+    { key: "heading", label: "Heading", kind: "text", placeholder: "A note from the parents" },
+    { key: "body", label: "Body", kind: "textarea", rows: 4, placeholder: "A few words…", hint: "Leave the heading blank to show only the paragraph" },
+  ],
+  quote: [
+    { key: "text", label: "Quote", kind: "textarea", rows: 3, placeholder: "“And so they danced…”" },
+    { key: "attribution", label: "Attribution", kind: "text", placeholder: "— The bride's father" },
+  ],
+  divider: [
+    { key: "style", label: "Style", kind: "select", options: [
+      { value: "line", label: "Line" },
+      { value: "dots", label: "Dots" },
+      { value: "flourish", label: "Flourish" },
+      { value: "sparkle", label: "Sparkle" },
+    ] },
+  ],
+  image: [
+    { key: "url", label: "Image URL", kind: "url", placeholder: "/uploads/… or https://…", hint: "Pick one from the Media tab or paste a link" },
+    { key: "caption", label: "Caption", kind: "text", placeholder: "Optional caption" },
+  ],
+  button: [
+    { key: "label", label: "Button text", kind: "text", placeholder: "View gift registry" },
+    { key: "url", label: "Link URL", kind: "url", placeholder: "https://registry.example.com" },
+  ],
+};
+
+/** Safe defaults per widget type; stored as the section's `data`. */
+export const WIDGET_DEFAULTS = {
+  text: { heading: "", body: "" },
+  quote: { text: "", attribution: "" },
+  divider: { style: "line" },
+  image: { url: "", caption: "" },
+  button: { label: "Learn more", url: "" },
+};
+
+export function newWidgetId() {
+  return `widget-${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
+}
+
 /**
  * Splits a plain string so the trailing word renders italic (the signature
  * momenti look). Punctuation travels with the word; a single word renders
@@ -158,7 +273,8 @@ function buildDefaultSections() {
 }
 
 // Sanitize a stored sections array: drop malformed/unknown rows, dedupe,
-// then append any missing known ids in their canonical spot.
+// keep widget blocks (type + sanitized data), then append any missing known
+// ids in their canonical spot.
 function sanitizeSections(raw) {
   if (!Array.isArray(raw)) return null;
   const seen = new Set();
@@ -166,16 +282,31 @@ function sanitizeSections(raw) {
   for (const row of raw) {
     if (!row || typeof row !== "object") continue;
     const id = String(row.id || "");
-    if (!SECTION_IDS.includes(id) || seen.has(id)) continue;
+    const type = String(row.type || "");
+    const isBuiltin = SECTION_IDS.includes(id);
+    const isWidget = WIDGET_TYPES.includes(type) || (!isBuiltin && /^widget-/.test(id));
+    if (!isBuiltin && !isWidget) continue;
+    if (seen.has(id)) continue;
     seen.add(id);
-    out.push({
+    const entry = {
       id,
       label:
         typeof row.label === "string" && row.label.trim()
           ? row.label.trim()
-          : SECTION_DEFAULT_EYEBROWS[id],
+          : SECTION_DEFAULT_EYEBROWS[id] || "",
       visible: row.visible !== false,
-    });
+    };
+    if (isWidget) {
+      entry.type = isBuiltin ? id : type || "text";
+      const defaults = WIDGET_DEFAULTS[entry.type] || {};
+      const rawData = row.data && typeof row.data === "object" ? row.data : {};
+      const data = {};
+      for (const key of Object.keys(defaults)) {
+        data[key] = typeof rawData[key] === "string" ? rawData[key] : defaults[key];
+      }
+      entry.data = data;
+    }
+    out.push(entry);
   }
   for (const def of SECTION_DEFS) {
     if (!seen.has(def.id)) {

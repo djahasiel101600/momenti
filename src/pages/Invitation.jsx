@@ -14,6 +14,19 @@ import RsvpForm from "@/components/invitation/RsvpForm";
 import StickyRsvp from "@/components/invitation/StickyRsvp";
 import MusicWidget from "@/components/invitation/MusicWidget";
 import NotFoundState from "@/components/invitation/NotFoundState";
+import TextBlock from "@/components/invitation/widgets/TextBlock";
+import QuoteBlock from "@/components/invitation/widgets/QuoteBlock";
+import DividerBlock from "@/components/invitation/widgets/DividerBlock";
+import ImageBlock from "@/components/invitation/widgets/ImageBlock";
+import ButtonBlock from "@/components/invitation/widgets/ButtonBlock";
+
+const WIDGET_COMPONENTS = {
+  text: TextBlock,
+  quote: QuoteBlock,
+  divider: DividerBlock,
+  image: ImageBlock,
+  button: ButtonBlock,
+};
 
 export default function Invitation() {
   const { client } = useParams();
@@ -68,7 +81,11 @@ export default function Invitation() {
   // accent overrides scoped to that block only).
   const enabledSections = data.sections.filter((s) => s.visible);
   const labels = Object.fromEntries(
-    data.sections.map((s) => [s.id, s.label || SECTION_DEFAULT_EYEBROWS[s.id] || s.id])
+    data.sections.map((s) =>
+      s.type
+        ? [s.id, s.label || ""] // widgets: no default kicker
+        : [s.id, s.label || SECTION_DEFAULT_EYEBROWS[s.id] || s.id]
+    )
   );
   const appearances = Object.fromEntries(
     enabledSections.map((s) => [s.id, resolveSectionAppearance(data, s.id)])
@@ -92,7 +109,8 @@ export default function Invitation() {
 
       <InvitationHero data={data} />
 
-      {enabledSections.map(({ id }) => {
+      {enabledSections.map((sec) => {
+        const id = sec.id;
         switch (id) {
           case "countdown":
             return data.date ? (
@@ -142,8 +160,18 @@ export default function Invitation() {
                 appearance={appearances.rsvp}
               />
             );
-          default:
-            return null;
+          default: {
+            // Widgets (WordPress-lite blocks) render by type.
+            const Block = WIDGET_COMPONENTS[sec.type || ""];
+            return Block ? (
+              <Block
+                key={id}
+                data={sec.data || {}}
+                eyebrow={labels[id] || ""}
+                appearance={appearances[id]}
+              />
+            ) : null;
+          }
         }
       })}
 

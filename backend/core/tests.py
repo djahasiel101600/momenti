@@ -883,6 +883,8 @@ class TemplateGalleryTests(TestCase):
         self.assertIn("wedding", slugs)
         self.assertIn("birthday", slugs)
         self.assertIn("gala", slugs)
+        self.assertIn("garden", slugs)
+        self.assertIn("christening", slugs)
 
     def test_list_filter_by_source(self):
         resp = self.client.get("/api/templates?source=built-in")
