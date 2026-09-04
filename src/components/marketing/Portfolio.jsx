@@ -1,31 +1,36 @@
 import { motion } from "framer-motion";
 import { Image } from "@/components/ui/image";
-
-const templates = [
-  {
-    title: "Wedding",
-    tag: "Editorial",
-    href: "/john-doe",
-    url: "/media/aa9ffa52d_generated_3c21d063.png",
-    alt: "Wedding invitation theme with silk fabric and a single white flower",
-  },
-  {
-    title: "Birthday",
-    tag: "Celebratory",
-    href: "/eleanor-30",
-    url: "/media/cfa8f8f5b_generated_3a646b19.png",
-    alt: "Birthday invitation theme with an elegant cake and candles",
-  },
-  {
-    title: "Gala",
-    tag: "Corporate",
-    href: "/john-doe",
-    url: "/media/89933be43_generated_7a55dc6a.png",
-    alt: "Corporate gala invitation theme with a grand ballroom",
-  },
-];
+import { useAuth } from "@/lib/AuthContext";
 
 export default function Portfolio() {
+  const { appPublicSettings } = useAuth();
+  const business = appPublicSettings?.public_settings?.business || {};
+  const sampleLink = business?.sampleLink || "/studio";
+
+  const templates = [
+    {
+      title: "Wedding",
+      tag: "Editorial",
+      href: sampleLink,
+      url: "/media/aa9ffa52d_generated_3c21d063.png",
+      alt: "Wedding invitation theme with silk fabric and a single white flower",
+    },
+    {
+      title: "Birthday",
+      tag: "Celebratory",
+      href: sampleLink,
+      url: "/media/cfa8f8f5b_generated_3a646b19.png",
+      alt: "Birthday invitation theme with an elegant cake and candles",
+    },
+    {
+      title: "Gala",
+      tag: "Corporate",
+      href: sampleLink,
+      url: "/media/89933be43_generated_7a55dc6a.png",
+      alt: "Corporate gala invitation theme with a grand ballroom",
+    },
+  ];
+
   return (
     <section id="templates" className="bg-[#0A0A0A] text-[#F2F0ED] py-28 md:py-40 px-6 lg:px-16">
       <div className="mx-auto max-w-[1400px]">

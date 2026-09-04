@@ -88,6 +88,13 @@ services:
       # Optional legal page URLs (blank = links hide in the SPA footer).
       MOMENTI_TERMS_URL: "${MOMENTI_TERMS_URL:-}"
       MOMENTI_PRIVACY_URL: "${MOMENTI_PRIVACY_URL:-}"
+      # Business/marketing info served via /api/app/settings for the public pages.
+      MOMENTI_BUSINESS_NAME: "${MOMENTI_BUSINESS_NAME:-}"
+      MOMENTI_BUSINESS_TAGLINE: "${MOMENTI_BUSINESS_TAGLINE:-}"
+      MOMENTI_BUSINESS_CONTACT_EMAIL: "${MOMENTI_BUSINESS_CONTACT_EMAIL:-}"
+      MOMENTI_BUSINESS_LOCATIONS: "${MOMENTI_BUSINESS_LOCATIONS:-}"
+      MOMENTI_BUSINESS_SOCIALS: "${MOMENTI_BUSINESS_SOCIALS:-}"
+      MOMENTI_HERO_SAMPLE_LINK: "${MOMENTI_HERO_SAMPLE_LINK:-}"
     volumes:
       - ./server/data:/data
     # The tunnel is the only ingress — no host ports. Uncomment to poke at it

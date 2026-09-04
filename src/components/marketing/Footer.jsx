@@ -7,7 +7,15 @@ export default function Footer() {
   const { appPublicSettings } = useAuth();
   const termsUrl = appPublicSettings?.terms_url;
   const privacyUrl = appPublicSettings?.privacy_url;
+  const business = appPublicSettings?.public_settings?.business || {};
+  const brand = business?.name || "momenti.co";
+  const tagline = business?.tagLine || "Digital Invitations that Move You.";
+  const contactEmail = business?.contactEmail || "";
+  const locations = Array.isArray(business?.locations) ? business.locations : [];
+  const socials = Array.isArray(business?.socials) ? business.socials : [];
   const hasLegal = Boolean(termsUrl || privacyUrl);
+  // "View sample" buttons / template cards: fall back to /studio when unset.
+  const sampleLink = business?.sampleLink || "/studio";
 
   return (
     <footer id="contact" className="bg-[#0A0A0A] text-[#F2F0ED] pt-28 pb-12 px-6 lg:px-16 border-t border-white/5">
@@ -28,7 +36,7 @@ export default function Footer() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8, delay: 0.3 }}
-              href="mailto:hello@momenti.co"
+              href={`mailto:${contactEmail || "hello@momenti.co"}`}
               className="inline-flex items-center gap-3 mt-10 text-xs tracking-luxe-sm uppercase bg-[#C58A58] text-[#0A0A0A] px-8 py-4 hover:bg-[#d89a68] transition-colors"
             >
               Get Started →
@@ -37,34 +45,51 @@ export default function Footer() {
           <div className="md:col-span-3 md:col-start-8">
             <p className="text-[10px] tracking-luxe uppercase text-[#F2F0ED]/40 mb-5">Studio</p>
             <p className="text-sm text-[#F2F0ED]/70 leading-relaxed">
-              hello@momenti.co
-              <br />
-              New York · London · Manila
+              {contactEmail || "hello@momenti.co"}
+              {locations.length > 0 && (
+                <>
+                  <br />
+                  {locations.join(" · ")}
+                </>
+              )}
             </p>
           </div>
           <div className="md:col-span-3">
             <p className="text-[10px] tracking-luxe uppercase text-[#F2F0ED]/40 mb-5">Follow</p>
             <ul className="space-y-3">
-              {socials.map((s) => (
-                <li key={s}>
+              {socials.length > 0 ? (
+                socials.map((s) => (
+                  <li key={s.name}>
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-[#F2F0ED]/70 hover:text-[#C58A58] transition-colors"
+                    >
+                      {s.name}
+                    </a>
+                  </li>
+                ))
+              ) : (
+                <li className="text-sm text-[#F2F0ED]/70">
                   <a
-                    href="#"
-                    className="text-sm text-[#F2F0ED]/70 hover:text-[#C58A58] transition-colors"
+                    href={`mailto:${contactEmail || "hello@momenti.co"}`}
+                    className="hover:text-[#C58A58] transition-colors"
                   >
-                    {s}
+                    {contactEmail || "hello@momenti.co"}
                   </a>
                 </li>
-              ))}
+              )}
             </ul>
           </div>
         </div>
 
         <div className="pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-[#F2F0ED]/30">
           <p className="font-serif-display text-xl lowercase">
-            momenti<span className="text-[#C58A58]">.</span>co
+            {brand.toLowerCase()}
           </p>
           <p className="text-xs tracking-wide">
-            © {new Date().getFullYear()} momenti.co — Digital Invitations that Move You.
+            © {new Date().getFullYear()} {brand} — {tagline}
           </p>
           {hasLegal && (
             <div className="flex gap-6 text-xs">

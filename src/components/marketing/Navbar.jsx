@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Menu, X } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
 
 const links = [
   { label: "Templates", href: "#templates" },
@@ -10,6 +11,9 @@ const links = [
 ];
 
 export default function Navbar() {
+  const { appPublicSettings } = useAuth();
+  const business = appPublicSettings?.public_settings?.business || {};
+  const brand = business?.name || "momenti";
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -31,7 +35,7 @@ export default function Navbar() {
     >
       <nav className="mx-auto max-w-[1400px] px-6 lg:px-12 h-20 flex items-center justify-between text-[#F2F0ED]">
         <a href="#top" className="font-serif-display text-2xl tracking-luxe-sm lowercase">
-          momenti<span className="text-[#C58A58]">.</span>co
+          {brand ? `${brand.toLowerCase()}.` : "momenti.co"}
         </a>
 
         <div className="hidden md:flex items-center gap-10">

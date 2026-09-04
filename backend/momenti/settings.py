@@ -271,6 +271,31 @@ else:
 MOMENTI_TERMS_URL = os.environ.get("MOMENTI_TERMS_URL", "").strip()
 MOMENTI_PRIVACY_URL = os.environ.get("MOMENTI_PRIVACY_URL", "").strip()
 
+# --- Business / marketing info (served via /api/app/settings) -----------------
+# These power the public marketing pages (Footer contact/socials, Hero sample
+# link, brand name). Blank values are omitted from the API so the UI hides
+# the empty blocks instead of showing fake placeholders.
+MOMENTI_BUSINESS_NAME = os.environ.get("MOMENTI_BUSINESS_NAME", "").strip()
+MOMENTI_BUSINESS_TAGLINE = os.environ.get("MOMENTI_BUSINESS_TAGLINE", "").strip()
+MOMENTI_BUSINESS_CONTACT_EMAIL = os.environ.get("MOMENTI_BUSINESS_CONTACT_EMAIL", "").strip()
+# Comma-separated cities, e.g. "Manila, Philippines"
+MOMENTI_BUSINESS_LOCATIONS = [
+    p.strip()
+    for p in os.environ.get("MOMENTI_BUSINESS_LOCATIONS", "").split(",")
+    if p.strip()
+]
+# Comma-separated "Name=URL" pairs, e.g. "Instagram=https://instagram.com/x"
+MOMENTI_BUSINESS_SOCIALS = []
+for pair in os.environ.get("MOMENTI_BUSINESS_SOCIALS", "").split(","):
+    pair = pair.strip()
+    if not pair:
+        continue
+    name, sep, url = pair.partition("=")
+    if sep and name.strip() and url.strip():
+        MOMENTI_BUSINESS_SOCIALS.append({"name": name.strip(), "url": url.strip()})
+# Where the Hero "View sample" button and the Portfolio template cards point.
+MOMENTI_HERO_SAMPLE_LINK = os.environ.get("MOMENTI_HERO_SAMPLE_LINK", "").strip()
+
 # --- i18n / tz / static / media ------------------------------------------------
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

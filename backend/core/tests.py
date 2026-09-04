@@ -774,6 +774,28 @@ class ThrottlingConfigTests(TestCase):
         self.assertIn("terms_url", data)
         self.assertIn("privacy_url", data)
 
+    def test_app_settings_endpoint_exposes_business_info(self):
+        from django.test import override_settings
+
+        with override_settings(
+            MOMENTI_BUSINESS_NAME="Moments Studio",
+            MOMENTI_BUSINESS_CONTACT_EMAIL="djahasiel@gmail.com",
+            MOMENTI_BUSINESS_LOCATIONS=["Santa Ana, Tubay, Agusan del Norte"],
+            MOMENTI_BUSINESS_SOCIALS=[
+                {"name": "Instagram", "url": "https://www.instagram.com/momentsstudio"}
+            ],
+            MOMENTI_HERO_SAMPLE_LINK="/studio",
+        ):
+            resp = self.client.get("/api/app/settings")
+            self.assertEqual(resp.status_code, 200)
+            biz = resp.json()["public_settings"]["business"]
+            self.assertEqual(biz["name"], "Moments Studio")
+            self.assertEqual(biz["contactEmail"], "djahasiel@gmail.com")
+            self.assertEqual(biz["locations"], ["Santa Ana, Tubay, Agusan del Norte"])
+            self.assertEqual(biz["socials"][0]["name"], "Instagram")
+            self.assertEqual(biz["socials"][0]["url"], "https://www.instagram.com/momentsstudio")
+            self.assertEqual(biz["sampleLink"], "/studio")
+
 
 @override_settings(MEDIA_ROOT=Path(tempfile.mkdtemp(prefix="momenti-test-media-analytics-")))
 class AnalyticsTests(TestCase):

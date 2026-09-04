@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Image } from "@/components/ui/image";
+import { useAuth } from "@/lib/AuthContext";
 
 const eventTypes = ["WEDDING", "GALA", "SOIRÉE", "ANNIVERSARY", "ENGAGEMENT", "CELEBRATION"];
 
@@ -8,6 +9,10 @@ const ENVELOPE_URL =
   "/media/eda2d0b14_generated_6fecf10c.png";
 
 export default function Hero() {
+  const { appPublicSettings } = useAuth();
+  const business = appPublicSettings?.public_settings?.business || {};
+  // "View Demo" button + template cards point here (default: /studio).
+  const sampleLink = business?.sampleLink || "/studio";
   const ref = useRef(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const y = useTransform(scrollYProgress, [0, 1], [0, 120]);
@@ -88,7 +93,7 @@ export default function Hero() {
             <span className="transition-transform group-hover:translate-x-1">→</span>
           </a>
           <a
-            href="/john-doe"
+            href={sampleLink}
             className="text-xs tracking-luxe-sm uppercase text-[#F2F0ED]/70 hover:text-[#F2F0ED] transition-colors border-b border-[#F2F0ED]/30 pb-1"
           >
             View Demo

@@ -226,10 +226,33 @@ class AppSettingsView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        # Business/marketing info is served at runtime from env so the public
+        # pages can be configured without a redeploy. Blank values are omitted
+        # so the UI hides the empty blocks rather than showing placeholders.
+        business = {}
+        if getattr(settings, "MOMENTI_BUSINESS_NAME", ""):
+            business["name"] = settings.MOMENTI_BUSINESS_NAME
+        if getattr(settings, "MOMENTI_BUSINESS_TAGLINE", ""):
+            business["tagLine"] = settings.MOMENTI_BUSINESS_TAGLINE
+        if getattr(settings, "MOMENTI_BUSINESS_CONTACT_EMAIL", ""):
+            business["contactEmail"] = settings.MOMENTI_BUSINESS_CONTACT_EMAIL
+        locations = getattr(settings, "MOMENTI_BUSINESS_LOCATIONS", [])
+        if locations:
+            business["locations"] = locations
+        socials = getattr(settings, "MOMENTI_BUSINESS_SOCIALS", [])
+        if socials:
+            business["socials"] = socials
+        if getattr(settings, "MOMENTI_HERO_SAMPLE_LINK", ""):
+            business["sampleLink"] = settings.MOMENTI_HERO_SAMPLE_LINK
+
         return Response(
             {
                 "id": "local",
-                "public_settings": {"app_name": "momenti.co", "auth_mode": "password"},
+                "public_settings": {
+                    "app_name": "momenti.co",
+                    "auth_mode": "password",
+                    "business": business,
+                },
                 "terms_url": settings.MOMENTI_TERMS_URL,
                 "privacy_url": settings.MOMENTI_PRIVACY_URL,
             }
