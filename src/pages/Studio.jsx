@@ -222,18 +222,26 @@ export default function Studio() {
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-transparent to-transparent" />
                     <span
-                      className="absolute top-3 left-3 text-[10px] tracking-luxe uppercase px-2 py-1 bg-[#0A0A0A]/70"
+                      className="absolute top-3 left-3 text-[10px] tracking-luxe uppercase px-2 py-1 bg-[#0A0A0A]/70 max-w-[65%] truncate"
                       style={{ color: it.accentColor }}
                     >
                       {templateName(it.template)}
                     </span>
+                    <button
+                      onClick={() => handleDelete(it.id, it.title || it.couple)}
+                      className="absolute top-3 right-3 inline-flex items-center gap-1.5 text-[10px] tracking-luxe-sm uppercase px-2 py-1 bg-[#0A0A0A]/70 text-[#F2F0ED]/70 hover:text-red-400 transition-colors"
+                      aria-label="Delete"
+                      title="Delete"
+                    >
+                      <Trash2 size={13} /> Delete
+                    </button>
                   </div>
                   <div className="p-5 flex flex-col flex-1">
-                    <h3 className="font-serif-display text-xl">{it.couple}</h3>
+                    <h3 className="font-serif-display text-xl break-words">{it.couple}</h3>
                     <p className="text-xs text-[#F2F0ED]/50 mt-1">
                       {it.eventType} · {formatDate(it.date)}
                     </p>
-                    <div className="mt-5 flex items-center gap-2">
+                    <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
                       <Link
                         to={`/${it.slug}`}
                         className="inline-flex items-center gap-1.5 text-[10px] tracking-luxe-sm uppercase text-[#C58A58] border-b border-[#C58A58]/40 pb-1 hover:border-[#C58A58] transition-colors"
@@ -264,13 +272,6 @@ export default function Studio() {
                         aria-label="Export as template file"
                       >
                         <Download size={12} /> Export
-                      </button>
-                      <button
-                        onClick={() => handleDelete(it.id, it.title || it.couple)}
-                        className="ml-auto text-[#F2F0ED]/30 hover:text-[#C58A58] transition-colors"
-                        aria-label="Delete"
-                      >
-                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
