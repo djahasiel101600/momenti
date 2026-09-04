@@ -1255,6 +1255,53 @@ class PayMongoApiTests(TestCase):
         again = self.client.get("/api/billing/usage", **self._auth(token))
         self.assertEqual(again.json()["subscription"]["provider_ref"], "cs_test_123")
 
+    def test_webhook_paid_accepts_current_payload_shape(self):
+        """Current Hosted Checkout payloads put the event type at data.type
+        and the resource at data.data (per docs.paymongo.com Hosted Checkout
+        guide). That shape must grant the subscription too."""
+        from core.models import User
+
+        token = self._register(email="pm2@test.dev")
+        user = User.objects.get(email="pm2@test.dev")
+        pending = PendingCheckout.objects.create(
+            reference="momenti-test-2",
+            user=user,
+            plan=Plan.objects.get(code="pro"),
+            period_days=30,
+        )
+        event = {
+            "event_type": "send.webhook",
+            "data": {
+                "type": "checkout_session.payment.paid",
+                "resource": "checkout_session",
+                "livemode": False,
+                "created_at": "2026-09-04T00:00:00Z",
+                "updated_at": "2026-09-04T00:00:00Z",
+                "data": {
+                    "id": "cs_test_456",
+                    "type": "checkout_session",
+                    "attributes": {
+                        "reference_number": pending.reference,
+                        "payments": [],
+                    },
+                },
+            },
+        }
+        body = json.dumps(event).encode("utf-8")
+        sig = _paymongo_sign(body, "whsec_test")
+        resp = self.client.post(
+            "/api/billing/webhook",
+            data=body,
+            content_type="application/json",
+            HTTP_PAYMONGO_SIGNATURE=sig,
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, "paid")
+        usage = self.client.get("/api/billing/usage", **self._auth(token))
+        self.assertEqual(usage.json()["plan"]["code"], "pro")
+        self.assertEqual(usage.json()["subscription"]["provider_ref"], "cs_test_456")
+
     def test_webhook_unknown_reference_acknowledges(self):
         body = json.dumps(_paid_event("momenti-does-not-exist")).encode("utf-8")
         sig = _paymongo_sign(body, "whsec_test")

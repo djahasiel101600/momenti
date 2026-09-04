@@ -70,6 +70,17 @@ def paymongo_request(method, path, payload=None, timeout=_REQUEST_TIMEOUT):
         raise MomentiError("Could not reach PayMongo", 502)
 
 
+def payment_method_types():
+    """Payment methods offered at checkout, env-configurable via
+    MOMENTI_PAYMONGO_METHODS (comma-separated). Per PayMongo's docs the type
+    strings are gcash / paymaya / card / grab_pay / qrph / billease / brankas
+    — Maya is "paymaya" (the "maya" string is not a documented type). New
+    accounts often start with GCash/Maya only — remove 'card' until card
+    payments are activated, or session creation is rejected with a 400."""
+    methods = getattr(settings, "MOMENTI_PAYMONGO_METHODS", None) or ["gcash", "paymaya", "card"]
+    return [str(m).strip() for m in methods if str(m).strip()]
+
+
 def create_checkout_session(plan, user, reference, success_url, cancel_url):
     """Create a PayMongo-hosted Checkout Session (GCash / Maya / cards).
 
@@ -87,7 +98,7 @@ def create_checkout_session(plan, user, reference, success_url, cancel_url):
                 "description": f"momenti {plan.name} - {plan.billing_period}ly",
             }
         ],
-        "payment_method_types": ["gcash", "maya", "card"],
+        "payment_method_types": payment_method_types(),
         "description": f"momenti {plan.name}",
         "success_url": success_url,
         "cancel_url": cancel_url,
@@ -128,14 +139,19 @@ def verify_webhook_signature(raw_body, header_value):
 
 def handle_webhook_event(body):
     """Process a verified PayMongo event. Idempotent: retries return an ack
-    without re-granting. Returns a small dict for logging."""
+    without re-granting. Returns a small dict for logging.
+
+    Accepts both webhook payload shapes: the legacy one with the event type
+    at ``data.attributes.type`` and the resource at ``data.attributes.data``,
+    and the current Hosted Checkout one (docs.paymongo.com) with them at
+    ``data.type`` and ``data.data``."""
     from .billing import billing_period_days, grant_subscription
     from .models import PendingCheckout
 
     data = (body or {}).get("data") or {}
-    attributes = data.get("attributes") or {}
-    event_type = attributes.get("type")
-    resource = attributes.get("data") or {}
+    outer_attrs = data.get("attributes") or {}
+    event_type = str(outer_attrs.get("type") or data.get("type") or "")
+    resource = outer_attrs.get("data") or data.get("data") or {}
     attrs = resource.get("attributes") or {}
 
     if event_type == "checkout_session.payment.paid":
@@ -160,14 +176,14 @@ def handle_webhook_event(body):
         log.info("PayMongo webhook: granted %s -> %s", pending.user.email, pending.plan.code)
         return {"ok": True, "granted": True}
 
-    if event_type == "payment.failed":
+    if event_type in ("payment.failed", "checkout_session.payment.failed"):
         reference = str(attrs.get("reference_number") or "")
         updated = PendingCheckout.objects.filter(reference=reference, status="pending").update(
             status="failed"
         )
         if updated:
             log.info("PayMongo webhook: marked %s failed", reference)
-        return {"ok": True, "ignored": "payment.failed"}
+        return {"ok": True, "ignored": event_type}
 
     log.info("PayMongo webhook: unhandled event %s", event_type)
     return {"ok": True, "ignored": event_type or None}

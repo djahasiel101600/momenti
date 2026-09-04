@@ -68,6 +68,9 @@ services:
       MOMENTI_PAYMONGO_SECRET_KEY: "${MOMENTI_PAYMONGO_SECRET_KEY:-}"
       MOMENTI_PAYMONGO_WEBHOOK_SECRET: "${MOMENTI_PAYMONGO_WEBHOOK_SECRET:-}"
       MOMENTI_PAYMONGO_MODE: "${MOMENTI_PAYMONGO_MODE:-test}"
+      # Payment methods offered at checkout. New PayMongo accounts start with
+      # GCash/Maya only — drop "card" until card payments are activated.
+      MOMENTI_PAYMONGO_METHODS: "${MOMENTI_PAYMONGO_METHODS:-gcash,paymaya,card}"
       # Per-IP throttling for public endpoints (register/login/otp/reset/rsvp).
       # Per-IP throttling for public endpoints (register/login/otp/reset/rsvp).
       # Adjust for traffic; the defaults blunt email-bombing and RSVP spam.

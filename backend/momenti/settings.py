@@ -207,16 +207,28 @@ MOMENTI_QUOTA_ENFORCEMENT = (
     os.environ.get("MOMENTI_QUOTA_ENFORCEMENT", "").strip().lower() not in {"off", "false", "0", "no"}
 )
 # Manual admin activation toggle (pre-PayMongo). Turn OFF once the checkout /
+# webhook path is live so only the provider can grant plans.
+MOMENTI_BILLING_MANUAL_ACTIVATION = (
+    os.environ.get("MOMENTI_BILLING_MANUAL_ACTIVATION", "").strip().lower()
+    not in {"off", "false", "0", "no"}
+)
 
 # --- PayMongo billing (SaaS Phase 3) ---------------------------------------
 MOMENTI_PAYMONGO_SECRET_KEY = os.environ.get("MOMENTI_PAYMONGO_SECRET_KEY", "").strip()
 MOMENTI_PAYMONGO_WEBHOOK_SECRET = os.environ.get("MOMENTI_PAYMONGO_WEBHOOK_SECRET", "").strip()
 MOMENTI_PAYMONGO_MODE = os.environ.get("MOMENTI_PAYMONGO_MODE", "test").strip().lower() or "test"
+# Payment methods offered at checkout (comma-separated). New PayMongo accounts
+# often start with GCash/Maya only; drop "card" until card payments are
+# activated, or session creation is rejected with a 400.
+MOMENTI_PAYMONGO_METHODS = [
+    m.strip()
+    for m in os.environ.get("MOMENTI_PAYMONGO_METHODS", "gcash,paymaya,card").split(",")
+    if m.strip()
+]
 MOMENTI_PAYMONGO_BASE_URL = (
     os.environ.get("MOMENTI_PAYMONGO_BASE_URL", "").strip()
     or "https://api.paymongo.com/v1"
 )
-# webhook path is live so only the provider can grant plans.
 MOMENTI_BILLING_MANUAL_ACTIVATION = (
     os.environ.get("MOMENTI_BILLING_MANUAL_ACTIVATION", "").strip().lower()
     not in {"off", "false", "0", "no"}
