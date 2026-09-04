@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Image } from "@/components/ui/image";
@@ -19,18 +19,22 @@ function formatDate(iso) {
 export default function Studio() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [view, setView] = useState("list");
   const [editing, setEditing] = useState(null);
   const fileInputRef = useRef(null);
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const load = async () => {
     setLoading(true);
+    setError("");
     try {
       const list = await base44.entities.Invitation.list("-created_date", 50);
       setItems(list || []);
     } catch (e) {
       setItems([]);
+      setError(e?.message || "Could not load your invitations.");
     } finally {
       setLoading(false);
     }
@@ -39,6 +43,19 @@ export default function Studio() {
   useEffect(() => {
     load();
   }, []);
+
+  // Deep link from the template gallery: /studio?edit=<id> opens the editor
+  // for the freshly imported record once the list has loaded.
+  useEffect(() => {
+    if (loading || error || view !== "list" || editing) return;
+    const editId = searchParams.get("edit");
+    if (!editId) return;
+    const item = items.find((it) => it.id === editId || it.slug === editId);
+    if (item) {
+      setSearchParams({}, { replace: true });
+      startEdit(item);
+    }
+  }, [loading, error, items, view, editing, searchParams]);
 
   const handleDelete = async (id, title) => {
     if (!window.confirm(`Delete "${title}"? This cannot be undone.`)) return;
@@ -170,6 +187,10 @@ export default function Studio() {
         {view === "list" &&
           (loading ? (
             <p className="text-[#F2F0ED]/40">Loading…</p>
+          ) : error ? (
+            <div className="p-4 rounded-sm border border-red-500/30 bg-red-500/10 text-sm text-red-300">
+              {error}
+            </div>
           ) : items.length === 0 ? (
             <div className="text-center py-24 border border-dashed border-white/15 rounded-sm">
               <p className="font-serif-display text-3xl text-[#F2F0ED]/80">No invitations yet</p>

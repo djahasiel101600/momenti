@@ -172,20 +172,25 @@ function toQuery(params) {
 
 /** CRUD over Invitation records, mirroring the Base44 entity API shape. */
 const invitationEntity = {
-  /** list("-created_date", 50) -> newest-first array */
+  /** list("-created_date", 50) -> newest-first array (owner-scoped; auth). */
   async list(sort, limit) {
     const qs = toQuery({ sort, limit });
-    return request(`/entities/invitations${qs ? `?${qs}` : ""}`);
+    return request(`/entities/invitations${qs ? `?${qs}` : ""}`, { auth: true });
   },
 
-  /** filter({ slug }, "-created_date", 1) -> matching array */
+  /**
+   * filter({ slug }, "-created_date", 1) -> matching array. Deliberately
+   * public: the guest invitation page looks up published invitations by slug
+   * without a token (the backend scopes anonymous lookups to published).
+   */
   async filter(query, sort, limit) {
     const qs = toQuery({ ...(query || {}), sort, limit });
     return request(`/entities/invitations${qs ? `?${qs}` : ""}`);
   },
 
+  /** get(id) -> the record (owner-scoped; used by the RSVP dashboard). */
   async get(id) {
-    return request(`/entities/invitations/${encodeURIComponent(id)}`);
+    return request(`/entities/invitations/${encodeURIComponent(id)}`, { auth: true });
   },
 
   async create(payload) {

@@ -67,7 +67,11 @@ export default function TemplateGallery() {
         n += 1;
       }
       const record = await base44.entities.Invitation.create({ ...payload, slug });
-      navigate(`/studio/edit/${record.id || record.slug}`);
+      // Studio is state-driven (there is no /studio/edit route): hand the new
+      // record to /studio via ?edit=<id>, which opens the editor once the
+      // list has loaded.
+      const editId = record?.id || record?.slug || "";
+      navigate(editId ? `/studio?edit=${encodeURIComponent(editId)}` : "/studio");
     } catch (e) {
       setError(e?.message || "Failed to import template.");
       setImporting(null);
