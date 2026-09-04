@@ -54,6 +54,7 @@ export default function Billing() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [qr, setQr] = useState(null); // { image, reference } — native QR Ph flow
+  const [qrZoom, setQrZoom] = useState(false); // fullscreen QR for easier scanning
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -111,6 +112,7 @@ export default function Billing() {
             description: "Your Pro plan is now active.",
           });
           setQr(null);
+          setQrZoom(false);
         }
       } catch {
         /* keep polling */
@@ -344,28 +346,55 @@ export default function Billing() {
               QR Ph Payment
             </p>
             <h3 className="font-serif-display text-2xl mt-2">Scan to pay</h3>
-            <div className="mt-6 inline-block border border-black/10 p-4 bg-white">
+            <div
+              className="mt-6 inline-block border border-black/10 p-5 bg-white cursor-zoom-in"
+              onClick={() => setQrZoom(true)}
+              title="Tap to enlarge"
+            >
               <img
                 src={qr.image.startsWith("data:") ? qr.image : `data:image/png;base64,${qr.image}`}
                 alt="QR Ph code"
-                className="w-56 h-56"
+                className="w-64 h-64 sm:w-72 sm:h-72"
               />
             </div>
+            <p className="mt-3 text-[10px] text-[#0A0A0A]/40">
+              Tap the code to enlarge it for easier scanning
+            </p>
             <p className="mt-4 text-xs text-[#0A0A0A]/60">
               Scan with any bank or e-wallet app — GCash, Maya, BPI, BDO, UnionBank and more.
-              The code expires in 30 minutes.
+              Raise your screen brightness and hold the phone steady. The code expires in 30
+              minutes — if it expires, tap Upgrade again for a fresh one.
             </p>
             <p className="mt-2 text-[10px] text-[#0A0A0A]/40 font-mono">{qr.reference}</p>
             <p className="mt-4 text-xs text-[#0A0A0A]/70 flex items-center justify-center gap-2">
               <Loader2 size={13} className="animate-spin" /> Waiting for payment…
             </p>
             <button
-              onClick={() => setQr(null)}
+              onClick={() => {
+                setQr(null);
+                setQrZoom(false);
+              }}
               className="mt-6 text-[10px] tracking-luxe-sm uppercase border border-black/15 text-[#0A0A0A]/60 px-4 py-2 hover:bg-black/5"
             >
               Close
             </button>
           </div>
+        </div>
+      )}
+
+      {qr && qrZoom && (
+        <div
+          className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center p-6 cursor-zoom-out"
+          onClick={() => setQrZoom(false)}
+        >
+          <img
+            src={qr.image.startsWith("data:") ? qr.image : `data:image/png;base64,${qr.image}`}
+            alt="QR Ph code enlarged"
+            className="w-[85vmin] h-[85vmin]"
+          />
+          <p className="mt-5 text-xs text-black/50">
+            Raise your screen brightness — tap anywhere to shrink
+          </p>
         </div>
       )}
       </main>
