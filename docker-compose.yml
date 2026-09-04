@@ -37,6 +37,10 @@ services:
       GUNICORN_WORKERS: "${GUNICORN_WORKERS:-2}"
       GUNICORN_THREADS: "${GUNICORN_THREADS:-8}"
       GUNICORN_TIMEOUT: "${GUNICORN_TIMEOUT:-120}"
+      # Keep-alive must sit above Cloudflare's connection idle-reuse window.
+      # Gunicorn's 2s default closes idle connections the tunnel still wants
+      # to reuse — POSTs can't be retried, so they surface as random 502s.
+      GUNICORN_KEEPALIVE: "${GUNICORN_KEEPALIVE:-75}"
       # Database: SQLite by default; set MOMENTI_DB_ENGINE=postgres (and
       # start the bundled postgres service) for the SaaS posture.
       MOMENTI_DB_ENGINE: "${MOMENTI_DB_ENGINE:-sqlite}"

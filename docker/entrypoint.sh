@@ -37,6 +37,7 @@ exec gunicorn momenti.wsgi:application \
   --worker-class gthread \
   --threads "${GUNICORN_THREADS:-8}" \
   --timeout "${GUNICORN_TIMEOUT:-120}" \
+  --keep-alive "${GUNICORN_KEEPALIVE:-75}" \
   --access-logfile - \
   --error-logfile -
 
