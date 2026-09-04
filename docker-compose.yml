@@ -58,6 +58,13 @@ services:
       # the manual-activation admin toggle is the pre-PayMongo grant path.
       MOMENTI_QUOTA_ENFORCEMENT: "${MOMENTI_QUOTA_ENFORCEMENT:-on}"
       MOMENTI_BILLING_MANUAL_ACTIVATION: "${MOMENTI_BILLING_MANUAL_ACTIVATION:-on}"
+      # PayMongo checkout + webhook (SaaS Phase 3). Set MOMENTI_PAYMONGO_SECRET_KEY
+      # to enable paid-plan checkout on /studio/billing; the webhook secret must
+      # match the one PayMongo shows for the /api/billing/webhook endpoint.
+      MOMENTI_PAYMONGO_SECRET_KEY: "${MOMENTI_PAYMONGO_SECRET_KEY:-}"
+      MOMENTI_PAYMONGO_WEBHOOK_SECRET: "${MOMENTI_PAYMONGO_WEBHOOK_SECRET:-}"
+      MOMENTI_PAYMONGO_MODE: "${MOMENTI_PAYMONGO_MODE:-test}"
+      # Per-IP throttling for public endpoints (register/login/otp/reset/rsvp).
       # Per-IP throttling for public endpoints (register/login/otp/reset/rsvp).
       # Adjust for traffic; the defaults blunt email-bombing and RSVP spam.
       MOMENTI_THROTTLE_ANON: "${MOMENTI_THROTTLE_ANON:-20/minute}"
