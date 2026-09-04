@@ -157,6 +157,13 @@ def create_qrph_intent(plan, user, reference):
     return intent_id, attached
 
 
+def retrieve_payment_intent(intent_id):
+    """GET a PaymentIntent — used by the QR Ph status poller so the Billing
+    page can confirm payment directly from PayMongo even if webhook delivery
+    is delayed or not configured."""
+    return paymongo_request("GET", f"payment_intents/{intent_id}")
+
+
 def verify_webhook_signature(raw_body, header_value):
     """Validate the Paymongo-Signature header for ``raw_body``.
 

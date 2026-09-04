@@ -28,6 +28,7 @@ urlpatterns = [
     path("api/billing/subscription/activate", views.BillingActivateView.as_view()),
     path("api/billing/subscription/cancel", views.BillingCancelView.as_view()),
     path("api/billing/checkout", views.BillingCheckoutView.as_view()),
+    path("api/billing/checkout/status", views.BillingCheckoutStatusView.as_view()),
     path("api/billing/webhook", views.BillingWebhookView.as_view()),
     path("api/analytics/track", views.InvitationViewTrackView.as_view()),
     path("api/analytics/views", views.InvitationAnalyticsView.as_view()),

@@ -235,6 +235,14 @@ const billingEntity = {
     return request("/billing/checkout", { method: "POST", body: { plan }, auth: true });
   },
 
+  /** GET /api/billing/checkout/status?reference=... -> { status } (QR Ph poll) */
+  checkoutStatus(reference) {
+    return request(
+      `/billing/checkout/status?reference=${encodeURIComponent(reference)}`,
+      { auth: true }
+    );
+  },
+
   /** POST /api/billing/subscription/cancel -> { subscription: {cancel_at_period_end} } */
   cancel() {
     return request("/billing/subscription/cancel", { method: "POST", auth: true });

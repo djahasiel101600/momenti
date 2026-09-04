@@ -1628,3 +1628,72 @@ class BillingQrPhTests(TestCase):
         pending.refresh_from_db()
         self.assertEqual(pending.status, "failed")
 
+    def test_status_endpoint_polls_paymongo_and_grants(self):
+        """The QR poll asks PayMongo directly; a succeeded intent grants the
+        plan even when webhook delivery is missing."""
+        from core.models import User
+
+        token = self._register()
+        user = User.objects.get(email="qr@test.dev")
+        PendingCheckout.objects.create(
+            reference="momenti-qr-3",
+            user=user,
+            plan=Plan.objects.get(code="pro"),
+            provider_ref="pi_test_7",
+            period_days=30,
+        )
+
+        def _fake(method, path, payload=None, timeout=10):
+            self.assertEqual(method, "GET")
+            self.assertEqual(path, "payment_intents/pi_test_7")
+            return {
+                "data": {
+                    "id": "pi_test_7",
+                    "type": "payment_intent",
+                    "attributes": {"status": "succeeded", "amount": 49900},
+                }
+            }
+
+        with mock.patch.object(paymongo_mod, "paymongo_request", side_effect=_fake):
+            resp = self.client.get(
+                "/api/billing/checkout/status?reference=momenti-qr-3",
+                **self._auth(token),
+            )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.json()["status"], "paid")
+        self.assertEqual(
+            PendingCheckout.objects.get(reference="momenti-qr-3").status, "paid"
+        )
+        usage = self.client.get("/api/billing/usage", **self._auth(token))
+        self.assertEqual(usage.json()["plan"]["code"], "pro")
+
+    def test_status_endpoint_pending_needs_no_paymongo_call(self):
+        """An unpaid QR (no PayMongo ref yet) answers pending without any
+        provider call."""
+        from core.models import User
+
+        token = self._register()
+        user = User.objects.get(email="qr@test.dev")
+        PendingCheckout.objects.create(
+            reference="momenti-qr-4",
+            user=user,
+            plan=Plan.objects.get(code="pro"),
+            provider_ref="",
+            period_days=30,
+        )
+        # No mock: if the view hit PayMongo here it would raise (URLError).
+        resp = self.client.get(
+            "/api/billing/checkout/status?reference=momenti-qr-4",
+            **self._auth(token),
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["status"], "pending")
+
+    def test_status_endpoint_unknown_reference_is_404(self):
+        token = self._register()
+        resp = self.client.get(
+            "/api/billing/checkout/status?reference=momenti-none",
+            **self._auth(token),
+        )
+        self.assertEqual(resp.status_code, 404)
+

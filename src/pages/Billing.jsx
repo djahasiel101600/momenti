@@ -97,16 +97,16 @@ export default function Billing() {
     return () => clearInterval(timer);
   }, [status, onPaidPlan]);
 
-  // Native QR Ph: poll until the payment.paid webhook flips the plan, then
-  // close the code and refresh — the buyer never leaves this page.
+  // Native QR Ph: poll our status endpoint, which asks PayMongo directly when
+  // the webhook hasn't landed yet — then close the code and refresh. The
+  // buyer never leaves this page.
   useEffect(() => {
     if (!qr || onPaidPlan) return;
     const timer = setInterval(async () => {
       try {
-        const fresh = await base44.billing.usage();
-        const freshSub = fresh?.subscription;
-        if (freshSub?.status === "active" && freshSub?.plan && freshSub.plan !== "free") {
-          setData(fresh);
+        const st = await base44.billing.checkoutStatus(qr.reference);
+        if (st?.status === "paid") {
+          setData(await base44.billing.usage());
           toast({
             title: "Payment received",
             description: "Your Pro plan is now active.",

@@ -62,6 +62,7 @@ from .paymongo import (
     create_qrph_intent,
     handle_webhook_event,
     paymongo_configured,
+    retrieve_payment_intent,
     verify_webhook_signature,
 )
 from .serializers import InvitationSerializer, RsvpSerializer, UserPublicSerializer
@@ -1209,6 +1210,55 @@ class BillingCheckoutView(APIView):
         return Response(
             {"checkout_url": checkout_url, "reference": reference, "plan": code}
         )
+
+
+class BillingCheckoutStatusView(APIView):
+    """GET /api/billing/checkout/status?reference=... (auth).
+
+    Polling companion for the native QR Ph flow: the Billing page checks here
+    every few seconds while the QR is on screen. If the webhook hasn't landed
+    (or isn't configured), this asks PayMongo directly whether the
+    PaymentIntent succeeded and grants the plan with the same idempotency as
+    the webhook."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        reference = str(request.query_params.get("reference") or "").strip()
+        if not reference:
+            raise MomentiError("Missing reference", 400)
+        pending = PendingCheckout.objects.filter(
+            reference=reference, user=request.user
+        ).first()
+        if pending is None:
+            raise MomentiError("Unknown reference", 404)
+        if pending.status == "paid":
+            return Response({"status": "paid"})
+        if pending.status == "failed":
+            return Response({"status": "failed"})
+
+        # Still pending: ask PayMongo directly (webhook-independent path).
+        intent_id = str(pending.provider_ref or "")
+        if intent_id.startswith("pi_"):
+            intent = retrieve_payment_intent(intent_id)
+            attrs = (intent.get("data") or {}).get("attributes") or {}
+            if str(attrs.get("status") or "") == "succeeded":
+                pending.status = "paid"
+                pending.save(update_fields=["status", "updated_date"])
+                grant_subscription(
+                    pending.user,
+                    pending.plan.code,
+                    period_days=billing_period_days(pending.plan.billing_period),
+                    provider="paymongo",
+                    provider_ref=intent_id,
+                )
+                log.info(
+                    "billing: QR Ph payment confirmed via polling -> granted %s -> %s",
+                    pending.user.email,
+                    pending.plan.code,
+                )
+                return Response({"status": "paid"})
+        return Response({"status": "pending"})
 
 
 class BillingWebhookView(APIView):
