@@ -1349,3 +1349,86 @@ class PayMongoApiTests(TestCase):
             PendingCheckout.objects.get(reference="momenti-fail-1").status, "failed"
         )
 
+
+@override_settings(
+    MOMENTI_PAYMONGO_SECRET_KEY="sk_test_dummy",
+    MOMENTI_PAYMONGO_WEBHOOK_SECRET="whsec_test",
+    **_TEST_THROTTLES,
+)
+class BillingPlanSyncTests(TestCase):
+    """MOMENTI_PRO_PRICE_CENTS boot sync: env-driven Pro plan pricing.
+
+    `billing_sync_plans` runs at container boot (entrypoint, right after
+    migrate) so the seeded Pro plan's price matches what /studio/billing
+    shows and what the PayMongo checkout charges."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        from rest_framework.views import APIView
+        APIView.throttle_classes = []
+        self.client = APIClient()
+
+    def _register(self, email="sync@test.dev"):
+        reg = self.client.post(
+            "/api/auth/register", {"email": email, "password": "secret123"}, format="json"
+        )
+        otp = reg.json()["dev_otp"]
+        ver = self.client.post(
+            "/api/auth/verify-otp", {"email": email, "otpCode": otp}, format="json"
+        )
+        return ver.json()["access_token"]
+
+    def test_env_price_applied_to_pro_plan(self):
+        from django.core.management import call_command
+
+        with override_settings(MOMENTI_PRO_PRICE_CENTS="29900"):
+            call_command("billing_sync_plans")
+        self.assertEqual(Plan.objects.get(code="pro").price_cents, 29900)
+        # Free stays untouched.
+        self.assertEqual(Plan.objects.get(code="free").price_cents, 0)
+
+    def test_invalid_value_fails_loudly_and_changes_nothing(self):
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        with override_settings(MOMENTI_PRO_PRICE_CENTS="four-ninety-nine"):
+            with self.assertRaises(CommandError):
+                call_command("billing_sync_plans")
+        self.assertEqual(Plan.objects.get(code="pro").price_cents, 49900)
+
+    def test_unset_value_is_a_noop(self):
+        from django.core.management import call_command
+
+        with override_settings(MOMENTI_PRO_PRICE_CENTS=""):
+            call_command("billing_sync_plans")
+        self.assertEqual(Plan.objects.get(code="pro").price_cents, 49900)
+
+    def test_checkout_charges_the_synced_price(self):
+        from django.core.management import call_command
+
+        token = self._register()
+        h = {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+        with override_settings(MOMENTI_PRO_PRICE_CENTS="29900"):
+            call_command("billing_sync_plans")
+        captured = {}
+
+        def _fake_session(method, path, payload=None, timeout=10):
+            captured["amount"] = payload["data"]["attributes"]["line_items"][0]["amount"]
+            return {
+                "data": {
+                    "id": "cs_test_priced",
+                    "type": "checkout_session",
+                    "attributes": {
+                        "checkout_url": "https://checkout.paymongo.com/cs_test_priced",
+                        "status": "active",
+                    },
+                }
+            }
+
+        with mock.patch.object(paymongo_mod, "paymongo_request", side_effect=_fake_session):
+            resp = self.client.post("/api/billing/checkout", {"plan": "pro"}, format="json", **h)
+        self.assertEqual(resp.status_code, 200, resp.content)
+        # The checkout session must charge exactly the env-driven price.
+        self.assertEqual(captured["amount"], 29900)
+

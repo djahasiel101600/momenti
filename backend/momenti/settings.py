@@ -229,6 +229,11 @@ MOMENTI_PAYMONGO_BASE_URL = (
     os.environ.get("MOMENTI_PAYMONGO_BASE_URL", "").strip()
     or "https://api.paymongo.com/v1"
 )
+# Pro plan monthly price override, in centavos (₱499.00 = 49900). Applied to
+# the seeded Pro plan at container boot by `manage.py billing_sync_plans`;
+# when set it wins over /admin edits on every boot. Leave unset to manage the
+# price via /admin only.
+MOMENTI_PRO_PRICE_CENTS = os.environ.get("MOMENTI_PRO_PRICE_CENTS", "").strip()
 MOMENTI_BILLING_MANUAL_ACTIVATION = (
     os.environ.get("MOMENTI_BILLING_MANUAL_ACTIVATION", "").strip().lower()
     not in {"off", "false", "0", "no"}

@@ -62,6 +62,9 @@ services:
       # the manual-activation admin toggle is the pre-PayMongo grant path.
       MOMENTI_QUOTA_ENFORCEMENT: "${MOMENTI_QUOTA_ENFORCEMENT:-on}"
       MOMENTI_BILLING_MANUAL_ACTIVATION: "${MOMENTI_BILLING_MANUAL_ACTIVATION:-on}"
+      # Optional Pro plan monthly price override in centavos (₱499.00 = 49900),
+      # applied to the seeded plan at boot. Leave unset to manage via /admin.
+      MOMENTI_PRO_PRICE_CENTS: "${MOMENTI_PRO_PRICE_CENTS:-}"
       # PayMongo checkout + webhook (SaaS Phase 3). Set MOMENTI_PAYMONGO_SECRET_KEY
       # to enable paid-plan checkout on /studio/billing; the webhook secret must
       # match the one PayMongo shows for the /api/billing/webhook endpoint.

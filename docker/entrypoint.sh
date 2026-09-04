@@ -29,6 +29,9 @@ if [ -n "$MOMENTI_DIST_DIR" ] && [ ! -f "$MOMENTI_DIST_DIR/index.html" ]; then
 fi
 
 python manage.py migrate --noinput
+# Apply env-driven plan pricing (MOMENTI_PRO_PRICE_CENTS) before serving so
+# /studio/billing and PayMongo checkout always agree on the amount charged.
+python manage.py billing_sync_plans
 
 exec gunicorn momenti.wsgi:application \
   --bind "0.0.0.0:${PORT:-8000}" \
