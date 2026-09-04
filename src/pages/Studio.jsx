@@ -213,7 +213,10 @@ export default function Studio() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {items.map((it) => (
-                <div key={it.id} className="group border border-white/10 rounded-sm overflow-hidden flex flex-col">
+                <div
+                  key={it.id}
+                  className="group min-w-0 border border-white/10 rounded-sm overflow-hidden flex flex-col"
+                >
                   <div className="relative aspect-[16/10] overflow-hidden">
                     {it.heroImage ? (
                       <Image src={it.heroImage} fittingType="fill" className="w-full h-full object-cover" />
@@ -222,25 +225,29 @@ export default function Studio() {
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-transparent to-transparent" />
                     <span
-                      className="absolute top-3 left-3 text-[10px] tracking-luxe uppercase px-2 py-1 bg-[#0A0A0A]/70 max-w-[65%] truncate"
+                      className="absolute top-3 left-3 text-[10px] tracking-luxe uppercase px-2 py-1 bg-[#0A0A0A]/70 max-w-[75%] truncate"
                       style={{ color: it.accentColor }}
                     >
                       {templateName(it.template)}
                     </span>
-                    <button
-                      onClick={() => handleDelete(it.id, it.title || it.couple)}
-                      className="absolute top-3 right-3 inline-flex items-center gap-1.5 text-[10px] tracking-luxe-sm uppercase px-2 py-1 bg-[#0A0A0A]/70 text-[#F2F0ED]/70 hover:text-red-400 transition-colors"
-                      aria-label="Delete"
-                      title="Delete"
-                    >
-                      <Trash2 size={13} /> Delete
-                    </button>
                   </div>
-                  <div className="p-5 flex flex-col flex-1">
-                    <h3 className="font-serif-display text-xl break-words">{it.couple}</h3>
-                    <p className="text-xs text-[#F2F0ED]/50 mt-1">
-                      {it.eventType} · {formatDate(it.date)}
-                    </p>
+                  <div className="p-5 flex flex-col flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="font-serif-display text-xl break-words">{it.couple}</h3>
+                        <p className="text-xs text-[#F2F0ED]/50 mt-1 truncate">
+                          {it.eventType} · {formatDate(it.date)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDelete(it.id, it.title || it.couple)}
+                        className="shrink-0 inline-flex items-center gap-1.5 text-[10px] tracking-luxe-sm uppercase px-2.5 py-1.5 border border-white/15 text-[#F2F0ED]/70 hover:text-red-400 hover:border-red-400/40 transition-colors"
+                        aria-label="Delete"
+                        title="Delete"
+                      >
+                        <Trash2 size={13} /> Delete
+                      </button>
+                    </div>
                     <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
                       <Link
                         to={`/${it.slug}`}
