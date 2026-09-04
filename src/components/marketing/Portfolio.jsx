@@ -41,7 +41,7 @@ export default function Portfolio() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6 }}
-              className="text-[11px] tracking-luxe uppercase text-[#C58A58]"
+              className="text-[11px] tracking-luxe uppercase text-[color:var(--brand-accent)]"
             >
               The Collection
             </motion.span>
@@ -52,7 +52,7 @@ export default function Portfolio() {
               transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
               className="font-serif-display font-light text-5xl md:text-7xl mt-4 leading-tight"
             >
-              Templates, <span className="italic text-[#C58A58]">curated.</span>
+              Templates, <span className="italic text-[color:var(--brand-accent)]">curated.</span>
             </motion.h2>
           </div>
           <motion.p
@@ -86,16 +86,16 @@ export default function Portfolio() {
                   className="w-full h-full transition-transform duration-700 ease-out group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-transparent to-transparent opacity-80" />
-                <div className="absolute inset-0 ring-1 ring-inset ring-white/10 transition-all duration-500 group-hover:ring-[#C58A58]/60 group-hover:shadow-[0_30px_60px_-20px_rgba(197,138,88,0.4)]" />
+                <div className="absolute inset-0 ring-1 ring-inset ring-white/10 transition-all duration-500 group-hover:ring-[color-mix(in_srgb,var(--brand-accent)_60%,transparent)] group-hover:shadow-[0_30px_60px_-20px_color-mix(in_srgb,var(--brand-accent)_40%,transparent)]" />
               </div>
               <div className="absolute bottom-0 inset-x-0 p-6 flex items-end justify-between">
                 <div>
-                  <p className="text-[10px] tracking-luxe uppercase text-[#C58A58] mb-1">
+                  <p className="text-[10px] tracking-luxe uppercase text-[color:var(--brand-accent)] mb-1">
                     {t.tag}
                   </p>
                   <h3 className="font-serif-display text-3xl text-[#F2F0ED]">{t.title}</h3>
                 </div>
-                <span className="text-[#F2F0ED]/60 transition-transform duration-500 group-hover:translate-x-1 group-hover:text-[#C58A58]">
+                <span className="text-[#F2F0ED]/60 transition-transform duration-500 group-hover:translate-x-1 group-hover:text-[color:var(--brand-accent)]">
                   →
                 </span>
               </div>

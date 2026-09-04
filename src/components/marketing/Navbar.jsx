@@ -14,6 +14,7 @@ export default function Navbar() {
   const { appPublicSettings } = useAuth();
   const business = appPublicSettings?.public_settings?.business || {};
   const brand = business?.name || "momenti";
+  const logoUrl = appPublicSettings?.public_settings?.branding?.logoUrl || "";
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -34,8 +35,15 @@ export default function Navbar() {
       }`}
     >
       <nav className="mx-auto max-w-[1400px] px-6 lg:px-12 h-20 flex items-center justify-between text-[#F2F0ED]">
-        <a href="#top" className="font-serif-display text-2xl tracking-luxe-sm lowercase">
-          {brand ? `${brand.toLowerCase()}.` : "momenti.co"}
+        <a
+          href="#top"
+          className="font-serif-display text-2xl tracking-luxe-sm lowercase inline-flex items-center gap-2"
+        >
+          {logoUrl ? (
+            <img src={logoUrl} alt={brand || "Home"} className="h-8 w-auto" />
+          ) : (
+            <>{brand ? `${brand.toLowerCase()}.` : "momenti.co"}</>
+          )}
         </a>
 
         <div className="hidden md:flex items-center gap-10">
@@ -56,7 +64,7 @@ export default function Navbar() {
           </Link>
           <a
             href="#contact"
-            className="text-xs tracking-luxe-sm uppercase border border-[#C58A58] text-[#C58A58] px-5 py-2.5 hover:bg-[#C58A58] hover:text-[#0A0A0A] transition-colors"
+            className="text-xs tracking-luxe-sm uppercase border border-[color:var(--brand-accent,#C58A58)] text-[color:var(--brand-accent,#C58A58)] px-5 py-2.5 hover:bg-[color:var(--brand-accent,#C58A58)] hover:text-[#0A0A0A] transition-colors"
           >
             Get Started
           </a>
@@ -98,7 +106,7 @@ export default function Navbar() {
             <a
               href="#contact"
               onClick={() => setOpen(false)}
-              className="text-sm tracking-luxe-sm uppercase border border-[#C58A58] text-[#C58A58] px-5 py-2.5 text-center"
+              className="text-sm tracking-luxe-sm uppercase border border-[color:var(--brand-accent)] text-[color:var(--brand-accent)] px-5 py-2.5 text-center"
             >
               Get Started
             </a>

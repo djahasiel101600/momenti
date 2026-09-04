@@ -46,6 +46,7 @@ urlpatterns = [
     path("api/admin/database", admin_views.AdminDatabaseView.as_view()),
     path("api/admin/config", admin_views.AdminConfigView.as_view()),
     path("api/admin/logs", admin_views.AdminLogsView.as_view()),
+    path("api/admin/site-settings", admin_views.SiteSettingsView.as_view()),
     re_path(r"^uploads/(?P<rest>.+)$", views.serve_upload_media),
     re_path(r"^uploads/$", views.serve_upload_media),
     re_path(r"^uploads$", views.serve_upload_media),

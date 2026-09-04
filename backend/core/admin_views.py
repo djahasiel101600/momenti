@@ -23,6 +23,7 @@ from .models import (
     PendingRegistration,
     Plan,
     Rsvp,
+    SiteSettings,
     Subscription,
     Template,
     Upload,
@@ -241,3 +242,38 @@ class AdminLogsView(APIView):
         except Exception:
             lines = []
         return Response({"logs": lines[-200:]})
+
+
+class SiteSettingsView(APIView):
+    """White-label business + branding: admin overrides over env defaults."""
+
+    permission_classes = [AdminOnly]
+
+    def get(self, request):
+        from . import whitelabel
+
+        return Response(
+            {
+                "settings": whitelabel.resolved(),
+                "overrides": whitelabel.current_overrides(),
+                "defaults": {
+                    "business": whitelabel.env_business(),
+                    "branding": whitelabel.env_branding(),
+                },
+            }
+        )
+
+    def put(self, request):
+        from . import whitelabel
+
+        data = request.data if isinstance(request.data, dict) else {}
+        try:
+            cleaned = whitelabel.clean_overrides(data)
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=400)
+        obj, _ = SiteSettings.objects.get_or_create(pk=1)
+        obj.data = cleaned
+        obj.updated_by = request.user if request.user.is_authenticated else None
+        obj.save()
+        log.info("site settings updated by %s", getattr(request.user, "email", "anonymous"))
+        return Response({"overrides": cleaned, "settings": whitelabel.resolved()})

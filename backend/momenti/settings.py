@@ -296,6 +296,15 @@ for pair in os.environ.get("MOMENTI_BUSINESS_SOCIALS", "").split(","):
 # Where the Hero "View sample" button and the Portfolio template cards point.
 MOMENTI_HERO_SAMPLE_LINK = os.environ.get("MOMENTI_HERO_SAMPLE_LINK", "").strip()
 
+# White-label branding. Accent colors drive --brand-accent / --brand-accent-hover
+# CSS vars (set by AuthContext from /api/app/settings); URL fields accept absolute
+# or root-relative paths. All four are also editable in /admin -> White-label
+# (DB overrides win over env; blanks fall back here).
+MOMENTI_BRAND_ACCENT_COLOR = os.environ.get("MOMENTI_BRAND_ACCENT_COLOR", "").strip()
+MOMENTI_BRAND_ACCENT_HOVER_COLOR = os.environ.get("MOMENTI_BRAND_ACCENT_HOVER_COLOR", "").strip()
+MOMENTI_BRAND_FAVICON_URL = os.environ.get("MOMENTI_BRAND_FAVICON_URL", "").strip()
+MOMENTI_BRAND_LOGO_URL = os.environ.get("MOMENTI_BRAND_LOGO_URL", "").strip()
+
 # --- i18n / tz / static / media ------------------------------------------------
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

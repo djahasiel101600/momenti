@@ -301,3 +301,25 @@ class Template(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.source})"
+
+
+class SiteSettings(models.Model):
+    """White-label overrides (admin console) layered over MOMENTI_* env defaults.
+
+    Singleton row (pk=1). `data` holds only the values an admin has explicitly
+    set from the Admin console's White-label tab; every read merges them on top
+    of the env defaults (core.whitelabel), so an empty key falls back to env.
+    """
+
+    data = models.JSONField(default=dict, blank=True)
+    updated_date = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="site_setting_updates",
+    )
+
+    def __str__(self):
+        return "Site settings"

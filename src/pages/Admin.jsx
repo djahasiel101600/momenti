@@ -15,6 +15,7 @@ import {
   Ban,
   CheckCircle2,
   ArrowLeft,
+  Palette,
   Search,
 } from "lucide-react";
 
@@ -67,6 +68,7 @@ function TabButton({ active, icon: Icon, label, onClick }) {
 const TABS = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "customers", label: "Customers", icon: Users },
+  { key: "branding", label: "White-label", icon: Palette },
   { key: "database", label: "Database", icon: Database },
   { key: "config", label: "Config", icon: Settings },
   { key: "logs", label: "Logs", icon: ScrollText },
@@ -479,6 +481,298 @@ function LogsTab() {
   );
 }
 
+// --- White-label ----------------------------------------------------------------
+
+const wlInputCls =
+  "w-full bg-transparent border border-white/15 rounded-sm px-3 py-2 text-sm outline-none focus:border-[color:var(--brand-accent,#C58A58)] placeholder:text-[#F2F0ED]/25 transition-colors";
+
+function WlField({ label, value, onChange, placeholder, hint, type = "text" }) {
+  return (
+    <div>
+      <span className="text-[10px] tracking-luxe uppercase text-[#F2F0ED]/40">{label}</span>
+      <div className="mt-2 flex items-center gap-2">
+        {type === "color" && /^#[0-9a-fA-F]{6}$/.test(value) && (
+          <input
+            type="color"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-9 w-9 shrink-0 cursor-pointer rounded-sm border border-white/15 bg-transparent"
+            aria-label={`${label} picker`}
+          />
+        )}
+        <input
+          type={type === "color" ? "text" : type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={wlInputCls}
+        />
+      </div>
+      {hint && <p className="mt-1 text-[11px] text-[#F2F0ED]/30">{hint}</p>}
+    </div>
+  );
+}
+
+function BrandingTab() {
+  const { refreshAppSettings } = useAuth();
+  const { toast } = useToast();
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [defaults, setDefaults] = useState({ business: {}, branding: {} });
+  const [overrides, setOverrides] = useState({ business: {}, branding: {} });
+  const [form, setForm] = useState({
+    business: { name: "", tagLine: "", contactEmail: "", sampleLink: "", locations: "" },
+    branding: { accentColor: "", accentHoverColor: "", logoUrl: "", faviconUrl: "" },
+  });
+  const [socials, setSocials] = useState([]);
+
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const data = await base44.admin.siteSettings();
+      setDefaults(data.defaults || { business: {}, branding: {} });
+      setOverrides(data.overrides || { business: {}, branding: {} });
+      const s = data.settings || { business: {}, branding: {} };
+      setForm({
+        business: {
+          name: s.business?.name || "",
+          tagLine: s.business?.tagLine || "",
+          contactEmail: s.business?.contactEmail || "",
+          sampleLink: s.business?.sampleLink || "",
+          locations: (s.business?.locations || []).join(", "),
+        },
+        branding: {
+          accentColor: s.branding?.accentColor || "",
+          accentHoverColor: s.branding?.accentHoverColor || "",
+          logoUrl: s.branding?.logoUrl || "",
+          faviconUrl: s.branding?.faviconUrl || "",
+        },
+      });
+      setSocials((s.business?.socials || []).map((x) => ({ name: x.name, url: x.url })));
+      setLoaded(true);
+    } catch (e) {
+      setError(e?.message || "Could not load site settings.");
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const setBiz = (k, v) => setForm((f) => ({ ...f, business: { ...f.business, [k]: v } }));
+  const setBrand = (k, v) => setForm((f) => ({ ...f, branding: { ...f.branding, [k]: v } }));
+
+  const save = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await base44.admin.updateSiteSettings({
+        business: {
+          name: form.business.name,
+          tagLine: form.business.tagLine,
+          contactEmail: form.business.contactEmail,
+          sampleLink: form.business.sampleLink,
+          locations: form.business.locations,
+          socials: socials.filter((s) => s.name.trim() && s.url.trim()),
+        },
+        branding: form.branding,
+      });
+      await refreshAppSettings?.();
+      toast({ title: "Saved", description: "White-label settings applied site-wide." });
+      load();
+    } catch (e) {
+      setError(e?.message || "Could not save site settings.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetAll = async () => {
+    if (!window.confirm("Remove all white-label overrides and fall back to the .env defaults?"))
+      return;
+    setSaving(true);
+    setError("");
+    try {
+      await base44.admin.updateSiteSettings({ business: {}, branding: {} });
+      await refreshAppSettings?.();
+      toast({ title: "Reset", description: "Back to environment defaults." });
+      load();
+    } catch (e) {
+      setError(e?.message || "Could not reset.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Hint text: shows whether a field is an admin override or still the env default.
+  const hintFor = (group, key, fallbackLabel) => {
+    if (overrides[group]?.[key]) return "Overridden — clear & save to use the env default";
+    const d = defaults[group]?.[key];
+    if (Array.isArray(d)) return d.length ? `${fallbackLabel}: ${d.join(", ")}` : fallbackLabel;
+    if (d) return `${fallbackLabel}: ${d}`;
+    return fallbackLabel;
+  };
+
+  if (!loaded) return <p className="text-[#F2F0ED]/40 text-sm">Loading…</p>;
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="mr-auto">
+          <h2 className="font-serif-display text-2xl">White-label</h2>
+          <p className="text-xs text-[#F2F0ED]/40 mt-1 max-w-xl">
+            Override business info and branding site-wide. Clear a field and save to fall back
+            to its .env default.
+          </p>
+        </div>
+        <button
+          onClick={resetAll}
+          disabled={saving}
+          className="text-xs uppercase tracking-luxe-sm px-4 py-2.5 border border-white/15 text-[#F2F0ED]/60 hover:text-[#F2F0ED] hover:border-white/30 disabled:opacity-40 transition-colors"
+        >
+          Reset to env defaults
+        </button>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase bg-[color:var(--brand-accent)] text-[#0A0A0A] px-5 py-2.5 hover:bg-[color:var(--brand-accent-hover)] disabled:opacity-40 transition-colors"
+        >
+          {saving ? "Saving…" : "Save & apply"}
+        </button>
+      </div>
+      <ErrorBanner message={error} />
+      <div className="grid md:grid-cols-2 gap-10">
+        <div className="space-y-5">
+          <p className="text-[10px] tracking-luxe uppercase text-[color:var(--brand-accent)]">
+            Business
+          </p>
+          <WlField
+            label="Brand name"
+            value={form.business.name}
+            onChange={(v) => setBiz("name", v)}
+            hint={hintFor("business", "name", "Env default")}
+            placeholder="Moments Studio"
+          />
+          <WlField
+            label="Tagline"
+            value={form.business.tagLine}
+            onChange={(v) => setBiz("tagLine", v)}
+            hint={hintFor("business", "tagLine", "Env default")}
+          />
+          <WlField
+            label="Contact email"
+            value={form.business.contactEmail}
+            onChange={(v) => setBiz("contactEmail", v)}
+            hint={hintFor("business", "contactEmail", "Env default")}
+          />
+          <WlField
+            label="Locations (comma-separated)"
+            value={form.business.locations}
+            onChange={(v) => setBiz("locations", v)}
+            hint={hintFor("business", "locations", "Env default")}
+          />
+          <WlField
+            label="Sample link (hero + template cards)"
+            value={form.business.sampleLink}
+            onChange={(v) => setBiz("sampleLink", v)}
+            hint={hintFor("business", "sampleLink", "Env default")}
+            placeholder="/studio"
+          />
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] tracking-luxe uppercase text-[#F2F0ED]/40">
+                Social profiles
+              </span>
+              <button
+                onClick={() => setSocials((s) => [...s, { name: "", url: "" }])}
+                className="text-[10px] uppercase tracking-luxe-sm text-[color:var(--brand-accent)] hover:opacity-80"
+              >
+                + Add
+              </button>
+            </div>
+            {socials.map((s, i) => (
+              <div key={i} className="flex gap-2 mt-2">
+                <input
+                  value={s.name}
+                  onChange={(e) =>
+                    setSocials((arr) => arr.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))
+                  }
+                  placeholder="Instagram"
+                  className={wlInputCls}
+                />
+                <input
+                  value={s.url}
+                  onChange={(e) =>
+                    setSocials((arr) => arr.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))
+                  }
+                  placeholder="https://…"
+                  className={`${wlInputCls} flex-1`}
+                />
+                <button
+                  onClick={() => setSocials((arr) => arr.filter((_, j) => j !== i))}
+                  className="text-[#F2F0ED]/40 hover:text-red-400 px-2 transition-colors"
+                  aria-label="Remove social"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <p className="mt-1 text-[11px] text-[#F2F0ED]/30">
+              {hintFor("business", "socials", "Env default")}
+            </p>
+          </div>
+        </div>
+        <div className="space-y-5">
+          <p className="text-[10px] tracking-luxe uppercase text-[color:var(--brand-accent)]">
+            Branding
+          </p>
+          <WlField
+            type="color"
+            label="Accent color"
+            value={form.branding.accentColor}
+            onChange={(v) => setBrand("accentColor", v)}
+            hint={hintFor("branding", "accentColor", "Env default")}
+            placeholder="#C58A58"
+          />
+          <WlField
+            type="color"
+            label="Accent hover color"
+            value={form.branding.accentHoverColor}
+            onChange={(v) => setBrand("accentHoverColor", v)}
+            hint={hintFor("branding", "accentHoverColor", "Env default")}
+            placeholder="#d89a68"
+          />
+          <WlField
+            label="Logo URL (navbar)"
+            value={form.branding.logoUrl}
+            onChange={(v) => setBrand("logoUrl", v)}
+            hint={hintFor("branding", "logoUrl", "Env default")}
+            placeholder="https://…/logo.png"
+          />
+          <WlField
+            label="Favicon URL"
+            value={form.branding.faviconUrl}
+            onChange={(v) => setBrand("faviconUrl", v)}
+            hint={hintFor("branding", "faviconUrl", "Env default")}
+          />
+          <div className="border border-white/10 rounded-sm p-4">
+            <p className="text-[10px] tracking-luxe uppercase text-[#F2F0ED]/40 mb-3">Preview</p>
+            <div
+              className="inline-flex items-center gap-2 text-xs uppercase tracking-luxe-sm px-4 py-2 text-[#0A0A0A]"
+              style={{ background: form.branding.accentColor || "#C58A58" }}
+            >
+              <ShieldCheck size={13} /> Accent preview
+            </div>
+            {form.branding.logoUrl && /^https?:\/\//.test(form.branding.logoUrl) && (
+              <img src={form.branding.logoUrl} alt="Logo preview" className="mt-3 h-8 w-auto" />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Page ---------------------------------------------------------------------
 
 export default function Admin() {
@@ -537,6 +831,7 @@ export default function Admin() {
             </nav>
             {tab === "overview" && <OverviewTab />}
             {tab === "customers" && <CustomersTab me={user} />}
+            {tab === "branding" && <BrandingTab />}
             {tab === "database" && <DatabaseTab />}
             {tab === "config" && <ConfigTab />}
             {tab === "logs" && <LogsTab />}

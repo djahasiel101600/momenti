@@ -307,6 +307,16 @@ const adminEntity = {
   logs() {
     return request("/admin/logs", { auth: true });
   },
+
+  /** GET /api/admin/site-settings -> { settings, overrides, defaults } */
+  siteSettings() {
+    return request("/admin/site-settings", { auth: true });
+  },
+
+  /** PUT /api/admin/site-settings — empty value = fall back to env default */
+  updateSiteSettings(overrides) {
+    return request("/admin/site-settings", { method: "PUT", body: overrides, auth: true });
+  },
 };
 
 /** The host's media library: previously uploaded images/videos/audio. */

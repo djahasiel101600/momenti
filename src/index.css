@@ -31,6 +31,11 @@
     --copper: 25 53% 56%;
     --muted-meta: 0 0% 55%;
 
+    /* White-label brand accents — overridable at runtime (admin console);
+       AuthContext sets these on <html> from /api/app/settings branding. */
+    --brand-accent: #c58a58;
+    --brand-accent-hover: #d89a68;
+
     --font-heading: "Cormorant Garamond", ui-serif, Georgia, serif;
     --font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
     --font-display: "Cormorant Garamond", ui-serif, Georgia, serif;

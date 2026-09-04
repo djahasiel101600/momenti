@@ -1723,7 +1723,126 @@ class BillingQrPhTests(TestCase):
 
 
 @override_settings(**_TEST_THROTTLES)
-class AdminApiTests(TestCase):
+class WhiteLabelTests(TestCase):
+    """White-label: /api/admin/site-settings overrides over MOMENTI_* env defaults."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        from rest_framework.views import APIView
+        APIView.throttle_classes = []
+        self.client = APIClient()
+        self.admin = User.objects.create_superuser(
+            email="wl-admin@test.dev", password="secret123"
+        )
+        self.member = User.objects.create(
+            email="wl-member@test.dev", role="member", email_verified=True
+        )
+        self.member.set_password("secret123")
+        self.member.save()
+        self.admin_token = issue_token(self.admin)
+        self.member_token = issue_token(self.member)
+        SiteSettings.objects.all().delete()
+
+    def _auth(self, token):
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    @override_settings(MOMENTI_BUSINESS_NAME="Env Studio")
+    def test_get_returns_env_defaults_and_empty_overrides(self):
+        resp = self.client.get("/api/admin/site-settings", **self._auth(self.admin_token))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["settings"]["business"]["name"], "Env Studio")
+        self.assertEqual(body["overrides"], {})
+        self.assertEqual(body["defaults"]["business"]["name"], "Env Studio")
+
+    def test_member_and_anonymous_forbidden(self):
+        resp = self.client.get("/api/admin/site-settings")
+        self.assertEqual(resp.status_code, 401)
+        resp = self.client.get("/api/admin/site-settings", **self._auth(self.member_token))
+        self.assertEqual(resp.status_code, 403)
+        resp = self.client.put(
+            "/api/admin/site-settings",
+            {"business": {"name": "Hax"}},
+            format="json",
+            **self._auth(self.member_token),
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    @override_settings(MOMENTI_BUSINESS_NAME="Env Studio", MOMENTI_BRAND_ACCENT_COLOR="#c58a58")
+    def test_put_overrides_flow_through_app_settings(self):
+        resp = self.client.put(
+            "/api/admin/site-settings",
+            {
+                "business": {
+                    "name": "Client Co",
+                    "socials": [{"name": "Instagram", "url": "https://instagram.com/clientco"}],
+                    "locations": "Quezon City",
+                },
+                "branding": {"accentColor": "#112233"},
+            },
+            format="json",
+            **self._auth(self.admin_token),
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["settings"]["business"]["name"], "Client Co")
+
+        # The public boot endpoint serves the merged truth.
+        resp = self.client.get("/api/app/settings")
+        self.assertEqual(resp.status_code, 200)
+        pub = resp.json()["public_settings"]
+        self.assertEqual(pub["business"]["name"], "Client Co")
+        self.assertEqual(pub["business"]["socials"][0]["name"], "Instagram")
+        self.assertEqual(pub["branding"]["accentColor"], "#112233")
+
+    def test_put_invalid_values_rejected(self):
+        for bad in (
+            {"branding": {"accentColor": "red"}},
+            {"business": {"sampleLink": "javascript:alert(1)"}},
+            {"business": {"contactEmail": "not an email"}},
+            {"business": {"socials": [{"name": "X", "url": "ftp://x"}]}},
+        ):
+            resp = self.client.put(
+                "/api/admin/site-settings", bad, format="json", **self._auth(self.admin_token)
+            )
+            self.assertEqual(resp.status_code, 400, bad)
+            self.assertIn("error", resp.json())
+
+    @override_settings(MOMENTI_BUSINESS_NAME="Env Studio")
+    def test_blank_override_falls_back_to_env(self):
+        auth = self._auth(self.admin_token)
+        resp = self.client.put(
+            "/api/admin/site-settings",
+            {"business": {"name": "Client Co"}},
+            format="json",
+            **auth,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["settings"]["business"]["name"], "Client Co")
+        # Clearing the field (blank) restores the env default.
+        resp = self.client.put(
+            "/api/admin/site-settings", {"business": {"name": ""}}, format="json", **auth
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["settings"]["business"]["name"], "Env Studio")
+        self.assertNotIn("name", resp.json()["overrides"]["business"])
+
+    @override_settings(MOMENTI_BRAND_ACCENT_COLOR="#c58a58")
+    def test_reset_all_overrides(self):
+        auth = self._auth(self.admin_token)
+        self.client.put(
+            "/api/admin/site-settings",
+            {"business": {"name": "Client Co"}, "branding": {"accentColor": "#112233"}},
+            format="json",
+            **auth,
+        )
+        resp = self.client.put(
+            "/api/admin/site-settings", {"business": {}, "branding": {}}, format="json", **auth
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["overrides"], {})
+        self.assertEqual(body["settings"]["branding"]["accentColor"], "#c58a58")
     """Admin API (/api/admin/*): staff/role=admin only, management, config."""
 
     def setUp(self):

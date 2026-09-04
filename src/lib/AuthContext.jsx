@@ -12,6 +12,37 @@ export const AuthProvider = ({ children }) => {
   const [authChecked, setAuthChecked] = useState(false);
   const [appPublicSettings, setAppPublicSettings] = useState(null); // { id, public_settings }
 
+  // White-label branding: apply accent colors, favicon and document title from
+  // /api/app/settings so the marketing site reflects admin/env configuration.
+  const applyBranding = (payload) => {
+    try {
+      const branding = payload?.public_settings?.branding || {};
+      const business = payload?.public_settings?.business || {};
+      const root = document.documentElement;
+      if (branding.accentColor) {
+        root.style.setProperty('--brand-accent', branding.accentColor);
+        root.style.setProperty('--brand-accent-hover', branding.accentHoverColor || branding.accentColor);
+      }
+      if (branding.faviconUrl) {
+        let link = document.querySelector("link[rel~='icon']");
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
+          document.head.appendChild(link);
+        }
+        link.href = branding.faviconUrl;
+      }
+      if (business.name) {
+        document.title = business.tagLine
+          ? `${business.name} — ${business.tagLine}`
+          : business.name;
+      }
+    } catch (e) {
+      // Branding is cosmetic; never block boot on it.
+      console.error('Branding apply failed:', e);
+    }
+  };
+
   useEffect(() => {
     checkAppState();
   }, []);
@@ -25,7 +56,9 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await fetch('/api/app/settings');
       if (res.ok) {
-        setAppPublicSettings(await res.json());
+        const payload = await res.json();
+        setAppPublicSettings(payload);
+        applyBranding(payload);
       }
     } catch (e) {
       console.error('App settings check failed:', e);
@@ -41,6 +74,21 @@ export const AuthProvider = ({ children }) => {
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
       setAuthChecked(true);
+    }
+  };
+
+  // Re-fetch public settings (used after white-label changes in /admin so the
+  // marketing chrome and branding vars update without a full page reload).
+  const refreshAppSettings = async () => {
+    try {
+      const res = await fetch('/api/app/settings');
+      if (res.ok) {
+        const payload = await res.json();
+        setAppPublicSettings(payload);
+        applyBranding(payload);
+      }
+    } catch (e) {
+      console.error('App settings refresh failed:', e);
     }
   };
 
@@ -103,7 +151,8 @@ export const AuthProvider = ({ children }) => {
       updateProfile,
       navigateToLogin,
       checkUserAuth,
-      checkAppState
+      checkAppState,
+      refreshAppSettings
     }}>
       {children}
     </AuthContext.Provider>

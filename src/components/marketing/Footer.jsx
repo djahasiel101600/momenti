@@ -29,7 +29,7 @@ export default function Footer() {
               transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
               className="font-serif-display font-light text-5xl md:text-7xl leading-[1.05]"
             >
-              Let's craft your <span className="italic text-[#C58A58]">moment.</span>
+              Let's craft your <span className="italic text-[color:var(--brand-accent)]">moment.</span>
             </motion.h2>
             <motion.a
               initial={{ opacity: 0 }}
@@ -37,7 +37,7 @@ export default function Footer() {
               viewport={{ once: true }}
               transition={{ duration: 0.8, delay: 0.3 }}
               href={`mailto:${contactEmail || "hello@momenti.co"}`}
-              className="inline-flex items-center gap-3 mt-10 text-xs tracking-luxe-sm uppercase bg-[#C58A58] text-[#0A0A0A] px-8 py-4 hover:bg-[#d89a68] transition-colors"
+              className="inline-flex items-center gap-3 mt-10 text-xs tracking-luxe-sm uppercase bg-[color:var(--brand-accent)] text-[#0A0A0A] px-8 py-4 hover:bg-[color:var(--brand-accent-hover)] transition-colors"
             >
               Get Started →
             </motion.a>
@@ -64,7 +64,7 @@ export default function Footer() {
                       href={s.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-[#F2F0ED]/70 hover:text-[#C58A58] transition-colors"
+                      className="text-sm text-[#F2F0ED]/70 hover:text-[color:var(--brand-accent)] transition-colors"
                     >
                       {s.name}
                     </a>
@@ -74,7 +74,7 @@ export default function Footer() {
                 <li className="text-sm text-[#F2F0ED]/70">
                   <a
                     href={`mailto:${contactEmail || "hello@momenti.co"}`}
-                    className="hover:text-[#C58A58] transition-colors"
+                    className="hover:text-[color:var(--brand-accent)] transition-colors"
                   >
                     {contactEmail || "hello@momenti.co"}
                   </a>

@@ -37,7 +37,7 @@ export default function Hero() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.8 }}
-          className="text-[11px] tracking-luxe uppercase text-[#C58A58] mb-8"
+          className="text-[11px] tracking-luxe uppercase text-[color:var(--brand-accent)] mb-8"
         >
           Digital Invitations
         </motion.span>
@@ -55,7 +55,7 @@ export default function Hero() {
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6, duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-            className="block italic text-[#C58A58]"
+            className="block italic text-[color:var(--brand-accent)]"
           >
             Invitations
           </motion.span>
@@ -87,7 +87,7 @@ export default function Hero() {
         >
           <a
             href="#contact"
-            className="group inline-flex items-center gap-3 text-xs tracking-luxe-sm uppercase bg-[#C58A58] text-[#0A0A0A] px-8 py-4 hover:bg-[#d89a68] transition-colors"
+            className="group inline-flex items-center gap-3 text-xs tracking-luxe-sm uppercase bg-[color:var(--brand-accent)] text-[#0A0A0A] px-8 py-4 hover:bg-[color:var(--brand-accent-hover)] transition-colors"
           >
             Get Started
             <span className="transition-transform group-hover:translate-x-1">→</span>
@@ -110,7 +110,7 @@ export default function Hero() {
           >
             {[...eventTypes, ...eventTypes].map((t, i) => (
               <span key={i} className="text-[10px] tracking-luxe uppercase text-[#F2F0ED]/30 whitespace-nowrap">
-                {t} <span className="text-[#C58A58]">/</span>
+                {t} <span className="text-[color:var(--brand-accent)]">/</span>
               </span>
             ))}
           </motion.div>
@@ -165,7 +165,7 @@ export default function Hero() {
               }}
             >
               <div className="text-center px-10">
-                <p className="text-[10px] tracking-luxe uppercase text-[#C58A58] mb-4">
+                <p className="text-[10px] tracking-luxe uppercase text-[color:var(--brand-accent)] mb-4">
                   You're Invited
                 </p>
                 <p className="font-serif-display italic text-5xl text-[#F2F0ED]">John &amp; Jane</p>
@@ -182,13 +182,13 @@ export default function Hero() {
           initial={{ scaleX: 0 }}
           animate={{ scaleX: 1 }}
           transition={{ delay: 0.8, duration: 1.2, ease: "easeInOut" }}
-          className="absolute top-[18%] left-0 right-0 h-px bg-[#C58A58]/40 origin-left"
+          className="absolute top-[18%] left-0 right-0 h-px bg-[color-mix(in_srgb,var(--brand-accent)_40%,transparent)] origin-left"
         />
         <motion.div
           initial={{ scaleX: 0 }}
           animate={{ scaleX: 1 }}
           transition={{ delay: 1, duration: 1.2, ease: "easeInOut" }}
-          className="absolute bottom-[18%] left-0 right-0 h-px bg-[#C58A58]/40 origin-right"
+          className="absolute bottom-[18%] left-0 right-0 h-px bg-[color-mix(in_srgb,var(--brand-accent)_40%,transparent)] origin-right"
         />
       </div>
 

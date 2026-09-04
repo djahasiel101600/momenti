@@ -36,7 +36,7 @@ export default function Features() {
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
             className="md:col-span-5"
           >
-            <span className="text-[11px] tracking-luxe uppercase text-[#C58A58]">The Craft</span>
+            <span className="text-[11px] tracking-luxe uppercase text-[color:var(--brand-accent)]">The Craft</span>
             <h2 className="font-serif-display font-light text-5xl md:text-6xl mt-4 leading-tight">
               Engineered for the <span className="italic">unforgettable.</span>
             </h2>
@@ -67,7 +67,7 @@ export default function Features() {
               <f.icon
                 size={26}
                 strokeWidth={1}
-                className="text-[#C58A58] mb-8 transition-transform duration-500 group-hover:scale-110"
+                className="text-[color:var(--brand-accent)] mb-8 transition-transform duration-500 group-hover:scale-110"
               />
               <h3 className="font-serif-display text-2xl mb-3">{f.title}</h3>
               <p className="text-sm text-[#F2F0ED]/50 leading-relaxed">{f.body}</p>
