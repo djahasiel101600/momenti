@@ -77,6 +77,14 @@ export const AuthProvider = ({ children }) => {
     base44.auth.logout(shouldRedirect ? window.location.href : undefined);
   };
 
+  // Self-service profile updates: merges the fresh public user into state so
+  // every consumer (header chip, role gates) reflects the change immediately.
+  const updateProfile = async (patch) => {
+    const updated = await base44.auth.updateProfile(patch);
+    if (updated) setUser(updated);
+    return updated;
+  };
+
   const navigateToLogin = () => {
     base44.auth.redirectToLogin(window.location.href);
   };
@@ -92,6 +100,7 @@ export const AuthProvider = ({ children }) => {
       appPublicSettings,
       authChecked,
       logout,
+      updateProfile,
       navigateToLogin,
       checkUserAuth,
       checkAppState

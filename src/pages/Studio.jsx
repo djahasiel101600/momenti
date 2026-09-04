@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Image } from "@/components/ui/image";
-import { Plus, Pencil, Trash2, ExternalLink, ClipboardList, Upload, Download, CreditCard, BarChart3, LayoutGrid, ShieldCheck } from "lucide-react";
+import { Plus, Pencil, Trash2, ExternalLink, ClipboardList, Upload, Download, CreditCard, BarChart3, LayoutGrid, ShieldCheck, UserCircle, ChevronDown, LogOut, User } from "lucide-react";
 import { templateDefaults, templateName } from "@/lib/templates";
 import { useAuth } from "@/lib/AuthContext";
 import { exportInvitation, parseInvitationImport } from "@/lib/invitationTransfer";
@@ -25,9 +25,21 @@ export default function Studio() {
   const [editing, setEditing] = useState(null);
   const fileInputRef = useRef(null);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const isAdmin = !!user && (user.role === "admin" || user.is_staff);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // Close the account menu when clicking anywhere outside it.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onDocClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [menuOpen]);
 
   const load = async () => {
     setLoading(true);
@@ -181,6 +193,61 @@ export default function Studio() {
                 </button>
               </>
             )}
+            {/* Account menu: identity, profile management, admin (if staff), logout */}
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                className="inline-flex items-center gap-2 text-xs tracking-luxe-sm uppercase border border-[#F2F0ED]/20 text-[#F2F0ED]/70 px-4 py-2.5 hover:border-[#C58A58] hover:text-[#C58A58] transition-colors"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+              >
+                <UserCircle size={15} />
+                <span className="max-w-[150px] truncate hidden sm:inline">{user?.email || "Account"}</span>
+                {isAdmin && <span className="text-[#C58A58] text-[9px]">ADMIN</span>}
+                <ChevronDown size={12} className={`transition-transform ${menuOpen ? "rotate-180" : ""}`} />
+              </button>
+              {menuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full mt-2 w-64 bg-[#111110] border border-white/10 rounded-sm shadow-2xl py-2 z-50"
+                >
+                  <div className="px-4 py-3 border-b border-white/10">
+                    <p className="text-sm break-words">{user?.email}</p>
+                    <p className="text-[10px] tracking-luxe uppercase text-[#F2F0ED]/40 mt-1">
+                      {isAdmin ? "Administrator" : "Member"} · Momenti Studio
+                    </p>
+                  </div>
+                  <Link
+                    to="/studio/profile"
+                    role="menuitem"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-[#F2F0ED]/80 hover:bg-white/5 hover:text-[#F2F0ED] transition-colors"
+                  >
+                    <User size={14} /> Profile settings
+                  </Link>
+                  {isAdmin && (
+                    <Link
+                      to="/admin"
+                      role="menuitem"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-sm text-[#F2F0ED]/80 hover:bg-white/5 hover:text-[#C58A58] transition-colors"
+                    >
+                      <ShieldCheck size={14} /> Admin console
+                    </Link>
+                  )}
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      logout(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400/80 hover:bg-white/5 hover:text-red-400 transition-colors border-t border-white/10"
+                  >
+                    <LogOut size={14} /> Log out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         {view === "list" && (

@@ -15,6 +15,7 @@ import {
   Ban,
   CheckCircle2,
   ArrowLeft,
+  Search,
 } from "lucide-react";
 
 function formatMoney(cents) {

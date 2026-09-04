@@ -65,7 +65,7 @@ from .paymongo import (
     retrieve_payment_intent,
     verify_webhook_signature,
 )
-from .serializers import InvitationSerializer, RsvpSerializer, UserPublicSerializer
+from .serializers import InvitationSerializer, RsvpSerializer, UserPublicSerializer, iso_z
 from .uploads import (
     ALLOWED_UPLOAD_EXT,
     EXT_TO_MIME,
@@ -355,6 +355,60 @@ class MeView(APIView):
 
     def get(self, request):
         return Response(UserPublicSerializer(request.user).data)
+
+
+class ProfileView(APIView):
+    """Self-service account management (GET + PATCH /api/auth/profile).
+
+    Permission-appropriate by design: a user can only ever act on their OWN
+    record. `role`, `is_staff` and `email` sent in the payload are ignored —
+    promoting/deactivating other accounts is admin-API territory, and email is
+    the login identity (no self-serve change). Password changes must present
+    the current password, matching the login hasher (legacy scrypt hashes
+    upgrade transparently on the successful check).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response(
+            {
+                **UserPublicSerializer(user).data,
+                "email_verified": bool(user.email_verified),
+                "created_date": iso_z(user.created_date),
+            }
+        )
+
+    def patch(self, request):
+        body = body_dict(request)
+        user = request.user
+        changed = False
+
+        if "full_name" in body:
+            full_name = str(body.get("full_name") or "").strip()
+            if len(full_name) > 255:
+                raise MomentiError("Name is too long (255 characters max)", 400)
+            user.full_name = full_name
+            changed = True
+
+        if body.get("new_password") is not None:
+            current = str(body.get("current_password") or "")
+            if not current:
+                raise MomentiError("Your current password is required to set a new one", 400)
+            if not user.check_password(current):
+                raise MomentiError("Current password is incorrect", 400)
+            if len(str(body["new_password"])) < 8:
+                raise MomentiError("Password must be at least 8 characters", 400)
+            user.password = make_password(str(body["new_password"]))
+            changed = True
+
+        if changed:
+            user.save()
+        return Response(UserPublicSerializer(user).data)
+
+    def post(self, request):  # alias for clients that cannot PATCH
+        return self.patch(request)
 
 
 class LogoutView(APIView):

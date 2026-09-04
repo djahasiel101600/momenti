@@ -82,6 +82,20 @@ async function me() {
   return request("/auth/me", { auth: true });
 }
 
+/** GET /api/auth/profile -> own account incl. email_verified + created_date. */
+async function getProfile() {
+  return request("/auth/profile", { auth: true });
+}
+
+/**
+ * PATCH /api/auth/profile — { full_name } and/or
+ * { current_password, new_password }. Returns the updated public user.
+ * role/is_staff/email are ignored server-side by design.
+ */
+async function updateProfile(patch) {
+  return request("/auth/profile", { method: "PATCH", body: patch, auth: true });
+}
+
 /** Returns { access_token, ...user } after validating `email + otpCode`. */
 async function verifyOtp({ email, otpCode }) {
   return request("/auth/verify-otp", { method: "POST", body: { email, otpCode } });
@@ -412,6 +426,8 @@ export const api = {
     resetPasswordRequest,
     resetPassword,
     me,
+    getProfile,
+    updateProfile,
     logout,
     redirectToLogin,
     setToken,

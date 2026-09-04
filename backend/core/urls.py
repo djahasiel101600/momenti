@@ -10,6 +10,7 @@ urlpatterns = [
     path("api/auth/resend-otp", views.ResendOtpView.as_view()),
     re_path(r"^api/auth/(?:login|login-with-email-password)$", views.LoginView.as_view()),
     path("api/auth/me", views.MeView.as_view()),
+    path("api/auth/profile", views.ProfileView.as_view()),
     path("api/auth/logout", views.LogoutView.as_view()),
     re_path(
         r"^api/auth/(?:reset-password-request|forgot-password)$",

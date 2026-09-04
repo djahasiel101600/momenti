@@ -1840,3 +1840,121 @@ class AdminApiTests(TestCase):
         self.assertEqual(body["role"], "admin")
         self.assertIs(body["is_staff"], True)
 
+
+@override_settings(**_TEST_THROTTLES)
+class ProfileApiTests(TestCase):
+    """Self-service account management (/api/auth/profile + /api/auth/logout).
+
+    Permission-appropriate by design: users act only on their own record —
+    role/is_staff/email escalation attempts are silently ignored, and password
+    changes require the current password.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        from rest_framework.views import APIView
+        APIView.throttle_classes = []
+        self.client = APIClient()
+
+    def _register(self, email="profile@test.dev", password="secret123"):
+        reg = self.client.post(
+            "/api/auth/register", {"email": email, "password": password}, format="json"
+        )
+        self.assertEqual(reg.status_code, 201, reg.content)
+        dev_otp = reg.json().get("dev_otp")
+        self.assertTrue(dev_otp)
+        ver = self.client.post(
+            "/api/auth/verify-otp", {"email": email, "otpCode": dev_otp}, format="json"
+        )
+        self.assertEqual(ver.status_code, 200, ver.content)
+        return ver.json()["access_token"]
+
+    def _auth(self, token):
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def test_requires_auth(self):
+        resp = self.client.get("/api/auth/profile")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_get_profile_returns_account_facts(self):
+        token = self._register()
+        resp = self.client.get("/api/auth/profile", **self._auth(token))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["email"], "profile@test.dev")
+        self.assertEqual(body["role"], "member")
+        self.assertIs(body["email_verified"], True)
+        self.assertIn("created_date", body)
+
+    def test_update_full_name_round_trips(self):
+        token = self._register()
+        resp = self.client.patch(
+            "/api/auth/profile", {"full_name": "Djah Siel"}, format="json", **self._auth(token)
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["full_name"], "Djah Siel")
+        me = self.client.get("/api/auth/me", **self._auth(token))
+        self.assertEqual(me.json()["full_name"], "Djah Siel")
+
+    def test_cannot_escalate_role_staff_or_email(self):
+        token = self._register()
+        resp = self.client.patch(
+            "/api/auth/profile",
+            {"role": "admin", "is_staff": True, "email": "hijack@test.dev"},
+            format="json",
+            **self._auth(token),
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["role"], "member")
+        self.assertIs(body["is_staff"], False)
+        self.assertEqual(body["email"], "profile@test.dev")
+
+    def test_password_change_requires_current_password(self):
+        token = self._register()
+        # Missing current password
+        resp = self.client.patch(
+            "/api/auth/profile", {"new_password": "newsecret456"}, format="json", **self._auth(token)
+        )
+        self.assertEqual(resp.status_code, 400)
+        # Wrong current password
+        resp = self.client.patch(
+            "/api/auth/profile",
+            {"current_password": "wrongpass", "new_password": "newsecret456"},
+            format="json",
+            **self._auth(token),
+        )
+        self.assertEqual(resp.status_code, 400)
+        # Too short
+        resp = self.client.patch(
+            "/api/auth/profile",
+            {"current_password": "secret123", "new_password": "short"},
+            format="json",
+            **self._auth(token),
+        )
+        self.assertEqual(resp.status_code, 400)
+        # Correct flow
+        resp = self.client.patch(
+            "/api/auth/profile",
+            {"current_password": "secret123", "new_password": "newsecret456"},
+            format="json",
+            **self._auth(token),
+        )
+        self.assertEqual(resp.status_code, 200)
+        # Old password no longer works, new one does.
+        old_login = self.client.post(
+            "/api/auth/login", {"email": "profile@test.dev", "password": "secret123"}, format="json"
+        )
+        self.assertEqual(old_login.status_code, 401)
+        new_login = self.client.post(
+            "/api/auth/login", {"email": "profile@test.dev", "password": "newsecret456"}, format="json"
+        )
+        self.assertEqual(new_login.status_code, 200)
+
+    def test_logout_endpoint_acknowledges(self):
+        resp = self.client.post("/api/auth/logout")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIs(resp.json()["ok"], True)
+
+
